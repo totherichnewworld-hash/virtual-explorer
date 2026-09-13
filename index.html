@@ -161,6 +161,18 @@ button{font:inherit; color:inherit; cursor:pointer}
 .btn.ghost:hover{border-color:var(--ink); color:var(--ink)}
 .btn.live[aria-pressed="true"]{background:var(--fluoro); border-color:var(--fluoro); color:#1A0D07}
 .livebar{display:flex; gap:7px; margin-top:9px; align-items:center}
+.motion{margin-top:12px; padding-top:12px; border-top:1px dashed var(--rule)}
+.mhead{display:flex; gap:9px; align-items:center; flex-wrap:wrap}
+.mbar{flex:1; min-width:90px; height:6px; background:var(--paper-3); border-radius:99px; overflow:hidden}
+.mbar i{display:block; height:100%; width:0%; background:var(--moss); border-radius:99px;
+  transition:width .08s linear}
+.mbar.hit i{background:var(--fluoro)}
+.minfo{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); margin-top:7px; line-height:1.6}
+.minfo b{color:var(--ink-2); font-weight:500}
+.mctl{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:9px}
+.mctl label{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3);
+  display:flex; align-items:center; gap:6px}
+.mctl input[type=range]{width:96px; accent-color:var(--fluoro)}
 .mini{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px;
   padding-top:12px; border-top:1px dashed var(--rule)}
 .mini .k{font-family:var(--f-mono); font-size:10px; letter-spacing:.1em; color:var(--ink-3)}
@@ -293,6 +305,20 @@ button{font:inherit; color:inherit; cursor:pointer}
       <div class="livebar">
         <button class="btn live" id="liveBtn" aria-pressed="false">实时同行</button>
         <span class="hint">打开后按 1.35 m/s 真实步速前进 —<br>在家踱步时挂着它，街景会跟着走。</span>
+      </div>
+      <div class="motion" id="motionBox" hidden>
+        <div class="k" style="font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;
+          color:var(--ink-3);margin-bottom:8px">体感 · 手机传感器</div>
+        <div class="mhead">
+          <button class="btn ghost" id="motionBtn" aria-pressed="false">打开体感</button>
+          <span class="mbar" id="mBarWrap"><i id="mBar"></i></span>
+        </div>
+        <p class="minfo" id="mInfo">手机上打开：拿着手机原地踏步就往前走，转身就转弯。</p>
+        <div class="mctl" id="mCtl" hidden>
+          <label for="mSens">灵敏度<input type="range" id="mSens" min="0.6" max="2.2" step="0.05" value="1.15"></label>
+          <button class="tinybtn" id="mCal">校准朝向</button>
+          <button class="tinybtn" id="mInv" aria-pressed="false">左右反向</button>
+        </div>
       </div>
       <div class="mini">
         <div><div class="k">今天</div><div class="v" id="mToday">0<i>m</i></div></div>
@@ -1067,6 +1093,16 @@ function addMeters(m,label){
   toast(label+' · +'+fmt(m)+' m');
   save();
 }
+function addSteps(n){
+  const st=cityState(CUR.id), total=CUR.wps[CUR.wps.length-1].m;
+  if(st.m>=total) return;
+  const before=cam.target;
+  cam.target=Math.min(total,cam.target+n*STEP_M);
+  st.m=cam.target; addToday(cam.target-before);
+  bumpStreak();
+  const mm=Math.floor(cam.target);
+  if(mm%20===0&&mm!==lastSaveM){ lastSaveM=mm; save() }
+}
 function bumpStreak(){
   const today=new Date().toISOString().slice(0,10);
   if(S.last===today) return;
@@ -1100,6 +1136,7 @@ function frame(now){
     cam.moving=live; cam.rush*=0.88;
     if(live) cam.phase+=WALK_MPS*dt*1.9;
   }
+  MOTION.tick(dt);
   if(V3.on) V3.render(dt); else drawScene();
   requestAnimationFrame(frame);
 }
@@ -1541,7 +1578,9 @@ const V3={
     let drag=false,px=0,py=0;
     const dn=e=>{drag=true;px=e.clientX;py=e.clientY;cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);$('#lookhint').classList.add('gone')};
     const mv=e=>{ if(!drag) return;
-      this.yaw-=(e.clientX-px)*0.0038; this.pitch-=(e.clientY-py)*0.0034;
+      if(MOTION.steering) MOTION.head0=(MOTION.head0||0)-(e.clientX-px)*0.22;
+      else this.yaw-=(e.clientX-px)*0.0038;
+      this.pitch-=(e.clientY-py)*0.0034;
       this.pitch=clamp(this.pitch,-0.95,1.05); px=e.clientX; py=e.clientY };
     const up=()=>{drag=false};
     cv.addEventListener('pointerdown',dn); cv.addEventListener('pointermove',mv);
@@ -1788,6 +1827,133 @@ $('#v3d').onclick=()=>setView('3d');
   document.addEventListener('keydown',e=>{ if((e.key==='w'||e.key==='W')&&V3.on&&!live&&!e.repeat) setLive(true) });
   document.addEventListener('keyup',e=>{ if((e.key==='w'||e.key==='W')&&live) setLive(false) });
 })();
+
+
+/* ============================================================
+   体感：踏步 → 前进，转身 → 转弯
+   ============================================================ */
+const MOTION={
+  on:false, steering:false, gotMotion:false, gotOrient:false,
+  smooth:9.8, base:9.8, armed:false, lastStep:0, hist:[],
+  thresh:1.15, head0:null, headNow:0, invert:false, yawTarget:0,
+  wake:null, probe:null, peak:0,
+
+  supported(){ return typeof window.DeviceMotionEvent!=='undefined' },
+
+  async toggle(){
+    if(this.on) return this.stop();
+    const btn=$('#motionBtn');
+    btn.disabled=true; btn.textContent='请求权限…';
+    let ok=true;
+    try{
+      if(window.DeviceMotionEvent&&DeviceMotionEvent.requestPermission){
+        ok=(await DeviceMotionEvent.requestPermission())==='granted';
+      }
+      if(ok&&window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission){
+        try{ await DeviceOrientationEvent.requestPermission() }catch(e){}
+      }
+    }catch(e){ ok=false }
+    btn.disabled=false;
+    if(!ok){ btn.textContent='打开体感'; this.say('没拿到传感器权限。在手机浏览器里打开这一页，再点一次。'); return }
+    this.start();
+  },
+
+  start(){
+    this.on=true; this.gotMotion=false; this.gotOrient=false;
+    this.hist=[]; this.head0=null; this.smooth=9.8; this.base=9.8;
+    this._m=e=>this.onMotion(e); this._o=e=>this.onOrient(e);
+    window.addEventListener('devicemotion',this._m);
+    window.addEventListener('deviceorientationabsolute',this._o);
+    window.addEventListener('deviceorientation',this._o);
+    $('#motionBtn').textContent='关掉体感';
+    $('#motionBtn').setAttribute('aria-pressed','true');
+    $('#mCtl').hidden=false;
+    this.say('等传感器…');
+    if(navigator.wakeLock&&navigator.wakeLock.request){
+      navigator.wakeLock.request('screen').then(w=>{this.wake=w}).catch(()=>{});
+    }
+    clearTimeout(this.probe);
+    this.probe=setTimeout(()=>{
+      if(!this.gotMotion){
+        this.stop();
+        this.say('这个环境读不到运动传感器 — 页面被嵌在框架里时常常会被禁掉。手机上单开这一页试试。');
+      }else if(!this.gotOrient){
+        this.say('读到步频了，但没有方向传感器：转向还是用手指拖。');
+      }
+    },2600);
+  },
+
+  stop(){
+    this.on=false; this.steering=false;
+    window.removeEventListener('devicemotion',this._m);
+    window.removeEventListener('deviceorientationabsolute',this._o);
+    window.removeEventListener('deviceorientation',this._o);
+    clearTimeout(this.probe);
+    if(this.wake&&this.wake.release){ this.wake.release().catch(()=>{}); this.wake=null }
+    $('#motionBtn').textContent='打开体感';
+    $('#motionBtn').setAttribute('aria-pressed','false');
+    $('#mCtl').hidden=true;
+    $('#mBar').style.width='0%';
+    this.say('手机上打开：拿着手机原地踏步就往前走，转身就转弯。');
+  },
+
+  say(t){ $('#mInfo').innerHTML=t },
+
+  onMotion(e){
+    this.gotMotion=true;
+    const a=e.accelerationIncludingGravity||e.acceleration;
+    if(!a||a.x==null) return;
+    const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+    this.smooth+=(mag-this.smooth)*0.3;
+    this.base+=(this.smooth-this.base)*0.016;
+    const d=this.smooth-this.base, now=performance.now();
+    this.peak=Math.max(this.peak*0.9,Math.abs(d));
+    if(!this.armed&&d>this.thresh&&now-this.lastStep>255){
+      this.armed=true; this.lastStep=now; this.hist.push(now);
+      if(this.hist.length>24) this.hist.shift();
+      addSteps(1);
+      const w=$('#mBarWrap'); w.classList.add('hit'); setTimeout(()=>w.classList.remove('hit'),110);
+    }else if(this.armed&&d<this.thresh*0.45){ this.armed=false }
+  },
+
+  onOrient(e){
+    let h=null;
+    if(typeof e.webkitCompassHeading==='number') h=e.webkitCompassHeading;
+    else if(e.alpha!=null) h=360-e.alpha;
+    if(h==null) return;
+    this.gotOrient=true; this.headNow=h;
+    if(this.head0==null) this.head0=h;
+    let d=((h-this.head0+540)%360)-180;
+    this.yawTarget=(this.invert?-d:d)*Math.PI/180;
+    this.steering=true;
+  },
+
+  calibrate(){ this.head0=this.headNow; this.yawTarget=0; toast('朝向已校准') },
+
+  tick(dt){
+    if(!this.on) return;
+    const now=performance.now();
+    while(this.hist.length&&now-this.hist[0]>6000) this.hist.shift();
+    const spm=Math.round(this.hist.length/6*60);
+    $('#mBar').style.width=clamp(this.peak/2.6*100,0,100)+'%';
+    if(this.gotMotion&&now-(this._said||0)>500){
+      this._said=now;
+      const moving=now-this.lastStep<1800;
+      const dir=this.steering?' · 朝向 <b>'+Math.round(((this.headNow-this.head0+540)%360)-180)+'°</b>':' · 无方向传感器';
+      this.say((moving?'步频 <b>'+spm+'</b> 步/分 · 最近 6 秒 <b>'+this.hist.length+'</b> 步'
+                     :'站着没动 · 踏起来就走')+dir);
+    }
+    if(this.steering&&V3.on){
+      V3.yaw+=(this.yawTarget-V3.yaw)*Math.min(1,dt*6);
+    }
+  }
+};
+if(MOTION.supported()) $('#motionBox').hidden=false;
+$('#motionBtn').onclick=()=>MOTION.toggle();
+$('#mCal').onclick=()=>MOTION.calibrate();
+$('#mInv').onclick=e=>{ MOTION.invert=!MOTION.invert;
+  e.currentTarget.setAttribute('aria-pressed',String(MOTION.invert)) };
+$('#mSens').oninput=e=>{ MOTION.thresh=parseFloat(e.target.value) };
 
 /* ---------- 启动 ---------- */
 buildTabs(); buildActs(); loadLocal();
