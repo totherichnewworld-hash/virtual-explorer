@@ -170,6 +170,12 @@ const MOTION = {
     $('#motionBtn').textContent = '关掉体感';
     $('#motionBtn').setAttribute('aria-pressed','true');
     this.say('等传感器…');
+    if (window.matchMedia('(max-width: 700px)').matches){
+      setTimeout(()=>{                       // 手机上收起面板，别挡着街
+        $('#hud').classList.add('collapsed');
+        $('#hudToggle').setAttribute('aria-expanded','false');
+      }, 1200);
+    }
     if (navigator.wakeLock && navigator.wakeLock.request)
       navigator.wakeLock.request('screen').then(w => this.wake = w).catch(()=>{});
     clearTimeout(this.probe);
@@ -218,7 +224,9 @@ const MOTION = {
       this.hist.push(now); if (this.hist.length > 40) this.hist.shift();
       this.stride = gap < 2400 ? this.strideFor() : STEP_M;
       advance(this.stride);
-      const w = $('#barWrap'); w.classList.add('hit'); setTimeout(()=>w.classList.remove('hit'), 110);
+      const w = $('#barWrap'), h = $('#hud');
+      w.classList.add('hit'); h.classList.add('hit');
+      setTimeout(()=>{ w.classList.remove('hit'); h.classList.remove('hit') }, 110);
     } else if (this.armed && d < this.thresh * 0.45) this.armed = false;
   },
 
@@ -292,19 +300,34 @@ async function boot(){
     tileset = await Cesium.Cesium3DTileset.fromUrl(src.url,
       { showCreditsOnScreen:true, maximumScreenSpaceError:16 });
     scene.primitives.add(tileset);
-    $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器里';
-    $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--gold)';
+    $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器 · 配额已封顶';
+    $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--ink-3)';
   }catch(err){
     await showTileError(src, err);
     return;
   }
 
   buildPresets();
+  bindPanels();
   bindLook();
   bindKeys();
   bindButtons();
   jumpTo(S.lat, S.lon, S.ground);
   scene.preRender.addEventListener(frame);
+}
+
+/* 手机上默认把两块面板收起来，别挡着街景 */
+function bindPanels(){
+  const narrow = window.matchMedia('(max-width: 700px)').matches;
+  [['#navPanel','#navToggle'],['#hud','#hudToggle']].forEach(([ps,ts])=>{
+    const panel = $(ps), btn = $(ts);
+    const set = v => {
+      panel.classList.toggle('collapsed', !v);
+      btn.setAttribute('aria-expanded', String(v));
+    };
+    btn.addEventListener('click', ()=> set(panel.classList.contains('collapsed')));
+    set(!narrow);
+  });
 }
 
 function buildPresets(){
@@ -423,7 +446,9 @@ function frame(){
 
   if (now - (frame._ui || 0) > 180){
     frame._ui = now;
-    $('#dist').textContent = Math.round(S.session).toLocaleString('en-US');
+    const d = Math.round(S.session).toLocaleString('en-US');
+    $('#dist').textContent = d;
+    $('#hudLabel').textContent = d + ' m' + (MOTION.on ? ' · 体感' : '');
     $('#totals').textContent = '今天 ' + Math.round(S.today).toLocaleString('en-US') +
       ' m · 累计 ' + (S.total / 1000).toFixed(1) + ' km';
     const p = PRESETS.find(p => Math.abs(p.lat - S.lat) < 0.02 && Math.abs(p.lon - S.lon) < 0.02);
@@ -432,6 +457,7 @@ function frame(){
       clock = ' · 当地 ' + new Intl.DateTimeFormat('zh-CN',
         {timeZone:p.tz, hour:'2-digit', minute:'2-digit', hour12:false}).format(new Date());
     }catch(e){} }
+    $('#navLabel').textContent = (p ? p.n.split(' · ')[0] : '去哪儿');
     $('#where').innerHTML = '<b>' + S.lat.toFixed(5) + ', ' + S.lon.toFixed(5) + '</b>' +
       ' · 朝向 ' + Math.round(S.heading) + '°' +
       (S.groundKnown ? '' : ' · 正在贴地…') + clock;

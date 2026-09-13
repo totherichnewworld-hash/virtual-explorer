@@ -30,6 +30,16 @@ html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);
   border-radius:4px;backdrop-filter:blur(9px);padding:13px 14px}
 .tl{left:14px;top:14px;max-width:330px}
 .br{right:14px;bottom:14px;width:min(320px,calc(100vw - 28px))}
+.ptoggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  background:none;border:0;padding:0;cursor:pointer;font-family:var(--f-mono);
+  font-size:11px;letter-spacing:.08em;color:var(--ink-3)}
+.ptoggle .chev{transition:transform .2s;font-size:10px}
+.panel.collapsed .ptoggle .chev{transform:rotate(-90deg)}
+.panel.collapsed{padding:9px 12px;width:auto}
+.panel.collapsed .pbody{display:none}
+.panel.collapsed .ptoggle{color:var(--ink)}
+.panel.hit{border-color:var(--fluoro)}
+.pbody{margin-top:10px}
 h1{font-family:var(--f-display);font-weight:800;font-size:20px;margin:0;letter-spacing:-.02em}
 .eyebrow{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--ink-3);margin:0 0 4px}
@@ -72,8 +82,13 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
 .cross::before{left:7px;top:0;width:1px;height:16px}
 .cross::after{top:7px;left:0;height:1px;width:16px}
 @media (max-width:560px){
-  .tl{max-width:calc(100vw - 28px)}
-  .br{bottom:82px}
+  .tl{max-width:calc(100vw - 28px);left:10px;top:10px}
+  .br{bottom:88px;right:10px;width:min(300px,calc(100vw - 20px))}
+  .panel{padding:11px 12px}
+  .panel.collapsed{padding:8px 11px}
+  .walk{bottom:16px;padding:15px 34px}
+  .big{font-size:26px}
+  .row{margin-top:8px}
 }
 </style>
 </head>
@@ -82,6 +97,9 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
 <i class="cross" id="cross" hidden></i>
 
 <div class="panel tl" id="navPanel" hidden>
+  <button class="ptoggle" id="navToggle" aria-expanded="true" aria-controls="navBody">
+    <span id="navLabel">去哪儿</span><span class="chev">▾</span></button>
+  <div class="pbody" id="navBody">
   <p class="eyebrow">Virtual Citywalk · Self-hosted</p>
   <h1>真实地球版</h1>
   <div class="row">
@@ -93,12 +111,16 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
     <button class="btn" id="goCoords">跳过去</button>
   </div>
   <p class="read" id="where">—</p>
-  <p class="hint"><span id="mode" style="color:var(--ink-3)">连接中…</span> · 影像 Google Photorealistic 3D Tiles<br>
+  <p class="hint"><span id="mode" style="color:var(--ink-3)" title="静态托管无法隐藏 key；配额上限才是真正的防线">连接中…</span> · 影像 Google Photorealistic 3D Tiles<br>
     拖动看四周 · 滚轮变焦 · W 前进 · A/D 转向 · R 回正<br>
     版权标识必须保留在画面上。</p>
+  </div>
 </div>
 
 <div class="panel br" id="hud" hidden>
+  <button class="ptoggle" id="hudToggle" aria-expanded="true" aria-controls="hudBody">
+    <span id="hudLabel">0 m</span><span class="chev">▾</span></button>
+  <div class="pbody" id="hudBody">
   <p class="eyebrow">这次走了</p>
   <div class="big"><span id="dist">0</span><i>m</i></div>
   <div class="bar" id="barWrap"><i id="bar"></i></div>
@@ -112,6 +134,7 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
     <button class="btn" id="absBtn" aria-pressed="false">跟真实指南针</button>
   </div>
   <p class="read" id="totals">今天 0 m · 累计 0.0 km</p>
+  </div>
 </div>
 <button class="walk" id="walkBtn" hidden>按住前进</button>
 
