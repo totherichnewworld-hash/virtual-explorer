@@ -53,8 +53,19 @@ Netlify / Vercel 同理，把那个函数改写成对应的 serverless 格式即
 
 ## 关于 key 安全（别跳过）
 
-`functions/api/key.js` **不是真正的保密** —— key 最终一定会到浏览器里，
-打开开发者工具就能看到。真正管用的是这三件事：
+先把三种模式的真实差别摊开 —— 它们不是"安全/不安全"，是三个不同的高度：
+
+| 模式 | key 在哪 | 谁能拿到 |
+|---|---|---|
+| **静态**（GitHub Pages） | 烤进 `earth/config.js` | 打开那个 URL 就能读。爬 JS 的机器人也能 |
+| **发 key**（`/api/key`） | 运行时发给浏览器 | 不在静态文件里了，但 DevTools 的 Network 里看得见 |
+| **代理**（`/v1/3dtiles/`） | **只在 Cloudflare 服务端** | 浏览器从头到尾没见过它 |
+
+前端会**自动选最高的那个**：先探 `/v1/3dtiles/root.json`，通了就走代理模式；
+不通再退回 key 模式；都没有就停在配置说明页。页面左上角会显示当前是
+「key 在服务端」还是「key 在浏览器里」，不猜。
+
+不管走哪种，下面三件事都要做：
 
 1. **HTTP referrer 限制**：Cloud Console → 你的 key → 应用限制 → 选 HTTP referrer，
    填 `https://你的域名/*`。别人拿去用会被 Google 拒掉。
@@ -166,14 +177,59 @@ artifact 版的 `index.html` 没有 `<!doctype>`／`<html>`／`<head>` —— �
 `tools/build-pages.mjs` 就是补这层外壳，同时给两个版本互相加了跳转链接。
 **artifact 源文件本身没被改动**，两边各自干净。
 
-### 和 Cloudflare Pages 的取舍
+---
+
+## 部署到 Cloudflare Pages（推荐，key 能真正藏住）
+
+```bash
+# 仓库根目录
+TARGET=cloudflare node tools/build-pages.mjs
+npx wrangler pages deploy _site --project-name citywalk
+```
+
+`TARGET=cloudflare` 会把 `selfhost/functions/` 一起打进 `_site/`，
+并且**不往前端塞任何 key**。
+
+然后在 Pages 项目的 **Settings → Environment variables** 里加：
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `GOOGLE_MAPS_API_KEY` | 你的 key | 只有服务端读得到 |
+| `ALLOWED_ORIGINS` | `https://citywalk.pages.dev` | 挡掉别人拿你的代理白嫖瓦片 |
+| `UPSTREAM_REFERER` | `https://citywalk.pages.dev/` | **别漏**，见下 |
+
+### 为什么要 `UPSTREAM_REFERER`
+
+你给 key 加了 HTTP referrer 限制之后，浏览器发请求会自动带 Referer，没问题；
+但**代理是从 Cloudflare 服务端发出去的，没有浏览器 Referer**，Google 会直接拒掉。
+所以要让 Worker 手动带上一个匹配限制的 Referer —— 就是这个变量。
+
+设了它，referrer 限制和代理就能同时生效：key 既藏在服务端，万一泄漏也用不了。
+
+### 代理模式的代价
+
+- **每张瓦片都会跑一次 Function**。Workers 免费额度 10 万次/天；
+  一次几分钟的散步大概几百到几千张瓦片 —— 你一个人用完全够，
+  公开给一群人用就要盯着点用量。
+- **多一跳延迟**。瓦片要绕经 Cloudflare 边缘，比直连 Google 慢一点点。
+- **我没有做缓存**。给瓦片加 CDN 缓存能省下大量 Function 调用，
+  但 Google 的服务条款对缓存和存储影像有明确限制 —— 要加之前先去读条款，
+  别想当然。
+
+### 不想让 Cloudflare 碰你的仓库
+
+`wrangler pages deploy` 是直传，不需要连 GitHub。
+仓库可以继续躺在那儿保持 private，一点都不用动。
+
+### 和 GitHub Pages 的取舍
 
 | | GitHub Pages | Cloudflare Pages |
 |---|---|---|
 | 私有仓库 | 要 Pro | 免费就行 |
 | serverless 函数 | ✗ | ✓（`functions/api/key.js` 直接能用） |
-| key 怎么进去 | 构建时注入，进 JS | 运行时按来源发放 |
+| key 怎么进去 | 构建时注入，**进 JS** | **代理模式下根本不进浏览器** |
 | 部署 | push 就好 | `npx wrangler pages deploy` 或连 Git |
 
-说到底两边的 key 都会到浏览器里 —— **真正拦住盗用的永远是 referrer 限制 + 配额上限**，
-不是托管平台。GitHub Pages 完全够用。
+GitHub Pages 胜在零成本零门槛；Cloudflare 胜在 key 能真正藏在服务端。
+但**无论哪边，referrer 限制 + 配额上限都是必做的** —— 代理只是让 key 难拿到，
+配额上限才是账单的最后一道保险。

@@ -6,6 +6,11 @@
  *   _site/earth/        真实地球版
  *   _site/earth/config.js   构建时从环境变量 GOOGLE_MAPS_API_KEY 生成（没有就不生成）
  *
+ * 两个目标：
+ *   node tools/build-pages.mjs                    → GitHub Pages（纯静态，key 烤进 JS）
+ *   TARGET=cloudflare node tools/build-pages.mjs  → Cloudflare Pages（带 functions/，
+ *                                                    key 留在服务端，不进 JS）
+ *
  * 本地跑：node tools/build-pages.mjs && npx serve _site
  */
 import fs from 'node:fs';
@@ -54,12 +59,27 @@ const earth = fs.readFileSync(path.join(out, 'earth', 'index.html'), 'utf8')
   border:1px solid #26384D">← 程序生成版</a></body>`);
 fs.writeFileSync(path.join(out, 'earth', 'index.html'), earth);
 
-/* ---- 3. key：只从环境变量来，绝不从仓库里读 ---- */
+/* ---- 3. Cloudflare：把 functions/ 带上，key 就不用进前端了 ---- */
+const target = (process.env.TARGET || 'github').toLowerCase();
+if (target === 'cloudflare') {
+  fs.cpSync(path.join(root, 'selfhost', 'functions'), path.join(out, 'functions'),
+            { recursive: true });
+  fs.writeFileSync(path.join(out, 'earth', 'config.js'),
+    '/* Cloudflare 模式：key 由 functions/ 在服务端处理，不进前端 */\n' +
+    'window.CITYWALK_CONFIG={googleMapsApiKey:""};\n');
+  console.log('· Cloudflare 模式：已带上 functions/，前端不含 key');
+  fs.writeFileSync(path.join(out, '.nojekyll'), '');
+  console.log('构建完成 → _site/');
+  process.exit(0);
+}
+
+/* ---- 4. GitHub Pages：纯静态，key 只能烤进 JS ---- */
 const key = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
 if (key) {
   fs.writeFileSync(path.join(out, 'earth', 'config.js'),
     `/* 构建时生成，勿手改 */\nwindow.CITYWALK_CONFIG={googleMapsApiKey:${JSON.stringify(key)}};\n`);
-  console.log('· 已注入 API key（长度 ' + key.length + '）');
+  console.log('· 已把 API key 注入 earth/config.js（长度 ' + key.length +
+    '）—— 静态托管绕不开，记得给 key 加 referrer 限制');
 } else {
   // 写个空壳，免得页面去 404 一个不存在的 config.js
   fs.writeFileSync(path.join(out, 'earth', 'config.js'),

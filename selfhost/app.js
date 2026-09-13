@@ -23,7 +23,27 @@ const PRESETS = [
   {n:'香港 · 中环',            lat:22.28190, lon:114.15830, h:80,  tz:'Asia/Hong_Kong'}
 ];
 
-/* ---------- 取 key：本地 config.js 优先，线上走 /api/key ---------- */
+/* ---------- 瓦片从哪来 ----------
+   1. 代理模式：同源的 /v1/3dtiles/，key 留在服务端，浏览器根本拿不到
+   2. key 模式：本地 config.js 或 /api/key，key 会进浏览器
+   3. 都没有：停在配置说明页，一个请求都不发                        */
+const PROXY_ROOT = '/v1/3dtiles/root.json';
+
+async function resolveTileSource(){
+  try{
+    const r = await fetch(PROXY_ROOT, { headers:{ accept:'application/json' } });
+    if (r.ok && /json/.test(r.headers.get('content-type') || '')){
+      return { url: PROXY_ROOT, mode: 'proxy' };
+    }
+  }catch(e){}
+  const key = await getKey();
+  if (!key) return null;
+  return {
+    url: 'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + encodeURIComponent(key),
+    mode: 'key'
+  };
+}
+
 async function getKey(){
   const cfg = window.CITYWALK_CONFIG;
   if (cfg && cfg.googleMapsApiKey && !/^YOUR_/.test(cfg.googleMapsApiKey)) return cfg.googleMapsApiKey;
@@ -213,8 +233,8 @@ const MOTION = {
 let viewer, scene, camera, tileset, lastSample = 0;
 
 async function boot(){
-  const key = await getKey();
-  if (!key) return;                       // 停在配置说明页
+  const src = await resolveTileSource();
+  if (!src) return;                       // 停在配置说明页
   $('#setup').hidden = true;
   $('#navPanel').hidden = $('#hud').hidden = $('#cross').hidden = false;
   $('#walkBtn').hidden = false;
@@ -231,10 +251,11 @@ async function boot(){
   scene.fog.enabled = true;
 
   try{
-    tileset = await Cesium.Cesium3DTileset.fromUrl(
-      'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + encodeURIComponent(key),
+    tileset = await Cesium.Cesium3DTileset.fromUrl(src.url,
       { showCreditsOnScreen:true, maximumScreenSpaceError:16 });
     scene.primitives.add(tileset);
+    $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器里';
+    $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--gold)';
   }catch(err){
     $('#setup').hidden = false;
     $('#setup .card').insertAdjacentHTML('beforeend',
