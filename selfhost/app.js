@@ -55,6 +55,44 @@ async function getKey(){
   return null;
 }
 
+/* ---------- 瓦片失败时，把 Google 的原话挖出来 ---------- */
+const REASONS = {
+  SERVICE_DISABLED:            ['这个项目还没启用 Map Tiles API', '控制台顶部搜 "Map Tiles API" → 点 启用'],
+  BILLING_DISABLED:            ['项目没绑定结算账号', 'Map Tiles API 强制要求绑定结算账号（要信用卡）。左侧 结算 → 关联结算账号'],
+  API_KEY_SERVICE_BLOCKED:     ['这把 key 不允许调 Map Tiles API', '凭据 → 点 key → API 限制 → 勾上 Map Tiles API'],
+  API_KEY_HTTP_REFERRER_BLOCKED:['key 上的「HTTP 来源」限制挡住了这个网址',
+                                 '凭据 → 点 key → 应用限制：把 ' + location.origin + location.pathname.replace(/earth\/$/, '') + '* 加进去，或直接改成「无」'],
+  API_KEY_INVALID:             ['key 不对', '可能复制少了几位。最快的办法是删掉重建一把，创建时弹窗里直接复制'],
+  RATE_LIMIT_EXCEEDED:         ['当天配额用完了', '这是配额上限在保护你。等太平洋时间零点自动恢复，或把每日配额调高一点'],
+  PERMISSION_DENIED:           ['被拒绝了', '看下面 Google 的原话']
+};
+
+async function showTileError(src, err){
+  let reason = '', message = '', status = '';
+  try{
+    const r = await fetch(src.url, { headers:{ accept:'application/json' } });
+    status = r.status;
+    const j = await r.json().catch(()=>null);
+    if (j && j.error){
+      message = j.error.message || '';
+      const d = (j.error.details || []).find(x => x.reason);
+      reason = (d && d.reason) || j.error.status || '';
+    }
+  }catch(e){}
+  const hit = REASONS[reason];
+  const card = document.querySelector('#setup .card');
+  card.innerHTML =
+    '<p class="eyebrow">瓦片没能加载</p>' +
+    '<h2>' + (hit ? hit[0] : ('Google 拒绝了请求' + (status ? '（' + status + '）' : ''))) + '</h2>' +
+    (hit ? '<p style="font-size:14px;line-height:1.9">' + hit[1] + '</p>' : '') +
+    (reason ? '<p class="warn"><b>reason:</b> <code>' + reason + '</code></p>' : '') +
+    (message ? '<p class="warn"><b>Google 原话：</b>' + message.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</p>' : '') +
+    (!reason && !message ? '<p class="warn">' + (err && err.message ? err.message : String(err)) + '</p>' : '') +
+    '<p class="warn">改完 Google 那边的设置后，<b>直接刷新这一页</b>就行 —— 不用重新部署。' +
+    '（来源限制的改动 Google 那边有几分钟延迟。）</p>';
+  document.getElementById('setup').hidden = false;
+}
+
 /* ---------- 大地测量：沿方位角前进 ---------- */
 function moveLatLon(lat, lon, bearingDeg, meters){
   const d = meters / R_EARTH, b = bearingDeg * Math.PI/180;
@@ -257,10 +295,7 @@ async function boot(){
     $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器里';
     $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--gold)';
   }catch(err){
-    $('#setup').hidden = false;
-    $('#setup .card').insertAdjacentHTML('beforeend',
-      '<p class="warn">瓦片加载失败：' + (err && err.message ? err.message : err) +
-      '<br>多半是 key 没启用 Map Tiles API，或 referrer 限制没放行这个域名。</p>');
+    await showTileError(src, err);
     return;
   }
 
