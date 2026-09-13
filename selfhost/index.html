@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>街区兑换所 · 真实地球版</title>
+<script>window.CESIUM_BASE_URL='https://cdn.jsdelivr.net/npm/cesium@1.144.0/Build/Cesium/';</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.144.0/Build/Cesium/Widgets/widgets.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600&display=swap">
+<style>
+:root{
+  --ink:#DCE3DC; --ink-2:#9FB4C6; --ink-3:#6C8399;
+  --paper:#0C1420; --paper-2:#121D2Cdd; --rule:#26384D;
+  --fluoro:#FF6B4A; --gold:#E8B44A; --moss:#8BAC7C;
+  --f-display:"Bricolage Grotesque",system-ui,sans-serif;
+  --f-body:"Noto Serif SC",serif;
+  --f-mono:"DM Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);
+  font-family:var(--f-body);overscroll-behavior:none}
+#globe{position:fixed;inset:0}
+#globe canvas{touch-action:none}
+.cesium-widget-credits{font-family:var(--f-mono)!important;font-size:10px!important;
+  color:#cfd8e3!important;text-shadow:0 1px 2px #000}
+.panel{position:fixed;z-index:10;background:var(--paper-2);border:1px solid var(--rule);
+  border-radius:4px;backdrop-filter:blur(9px);padding:13px 14px}
+.tl{left:14px;top:14px;max-width:330px}
+.br{right:14px;bottom:14px;width:min(320px,calc(100vw - 28px))}
+h1{font-family:var(--f-display);font-weight:800;font-size:20px;margin:0;letter-spacing:-.02em}
+.eyebrow{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 4px}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:10px}
+button,select,input{font:inherit;color:inherit}
+.btn{background:none;border:1px solid var(--rule);border-radius:3px;padding:7px 12px;
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.04em;cursor:pointer;
+  transition:border-color .15s,color .15s}
+.btn:hover{border-color:var(--ink-2)}
+.btn[aria-pressed="true"]{background:var(--fluoro);border-color:var(--fluoro);color:#1A0D07}
+.btn.go{background:var(--fluoro);border-color:var(--fluoro);color:#1A0D07;font-size:13px;padding:11px 20px}
+select,input[type=text]{background:#0C1420;border:1px solid var(--rule);border-radius:3px;
+  padding:7px 9px;font-family:var(--f-mono);font-size:11.5px;min-width:0}
+input[type=range]{accent-color:var(--fluoro);width:92px}
+.read{font-family:var(--f-mono);font-size:11px;color:var(--ink-2);line-height:1.75;margin:9px 0 0}
+.read b{color:var(--ink);font-weight:500}
+.big{font-family:var(--f-display);font-weight:800;font-size:30px;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;line-height:1}
+.big i{font-style:normal;font-size:12px;font-weight:500;color:var(--ink-2);margin-left:3px}
+.bar{height:5px;background:#1B2836;border-radius:99px;overflow:hidden;margin-top:9px}
+.bar i{display:block;height:100%;width:0;background:var(--moss);transition:width .08s linear}
+.bar.hit i{background:var(--fluoro)}
+.hint{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);line-height:1.6;margin-top:8px}
+.setup{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#0C1420;
+  padding:22px;overflow:auto}
+.setup .card{max-width:620px;background:#121D2C;border:1px solid var(--rule);border-radius:5px;padding:24px}
+.setup h2{font-family:var(--f-display);font-size:23px;margin:0 0 6px;letter-spacing:-.02em}
+.setup ol{padding-left:20px;line-height:1.9;font-size:14px}
+.setup code{font-family:var(--f-mono);font-size:12px;background:#0C1420;padding:2px 6px;
+  border-radius:3px;color:var(--gold);word-break:break-all}
+.setup .warn{border-left:3px solid var(--fluoro);padding-left:11px;margin-top:16px;
+  font-size:13px;color:var(--ink-2);line-height:1.75}
+.walk{position:fixed;z-index:11;left:50%;transform:translateX(-50%);bottom:20px;
+  background:var(--fluoro);color:#1A0D07;border:0;border-radius:99px;padding:14px 30px;
+  font-family:var(--f-mono);font-size:13px;letter-spacing:.06em;cursor:pointer;
+  box-shadow:0 10px 30px -12px #000;user-select:none;touch-action:none}
+.cross{position:fixed;z-index:9;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
+  pointer-events:none;opacity:.5}
+.cross::before,.cross::after{content:"";position:absolute;background:#fff}
+.cross::before{left:7px;top:0;width:1px;height:16px}
+.cross::after{top:7px;left:0;height:1px;width:16px}
+@media (max-width:560px){
+  .tl{max-width:calc(100vw - 28px)}
+  .br{bottom:82px}
+}
+</style>
+</head>
+<body>
+<div id="globe"></div>
+<i class="cross" id="cross" hidden></i>
+
+<div class="panel tl" id="navPanel" hidden>
+  <p class="eyebrow">Virtual Citywalk · Self-hosted</p>
+  <h1>真实地球版</h1>
+  <div class="row">
+    <select id="preset" aria-label="起点"></select>
+    <button class="btn" id="goPreset">去这里</button>
+  </div>
+  <div class="row">
+    <input type="text" id="coords" placeholder="纬度,经度 或粘贴地图链接" aria-label="坐标">
+    <button class="btn" id="goCoords">跳过去</button>
+  </div>
+  <p class="read" id="where">—</p>
+  <p class="hint">拖动看四周 · 滚轮变焦 · W 前进 · A/D 转向 · R 回正<br>
+    影像来自 Google Photorealistic 3D Tiles，版权标识必须保留在画面上。</p>
+</div>
+
+<div class="panel br" id="hud" hidden>
+  <p class="eyebrow">这次走了</p>
+  <div class="big"><span id="dist">0</span><i>m</i></div>
+  <div class="bar" id="barWrap"><i id="bar"></i></div>
+  <p class="read" id="motionRead">体感没开</p>
+  <div class="row">
+    <button class="btn" id="motionBtn" aria-pressed="false">打开体感</button>
+    <button class="btn" id="calBtn">校准朝向</button>
+  </div>
+  <div class="row">
+    <label class="hint" for="sens">灵敏度 <input type="range" id="sens" min="0.6" max="2.2" step="0.05" value="1.15"></label>
+    <button class="btn" id="absBtn" aria-pressed="false">跟真实指南针</button>
+  </div>
+  <p class="read" id="totals">今天 0 m · 累计 0.0 km</p>
+</div>
+<button class="walk" id="walkBtn" hidden>按住前进</button>
+
+<div class="setup" id="setup">
+  <div class="card">
+    <p class="eyebrow">还差一把钥匙</p>
+    <h2>配置 Google Maps API Key</h2>
+    <ol>
+      <li>去 Google Cloud Console 新建项目，启用 <code>Map Tiles API</code>。</li>
+      <li>创建 API key，<b>务必加两道限制</b>：应用限制选 <code>HTTP referrer</code> 填你的域名；
+        API 限制只勾 <code>Map Tiles API</code>。</li>
+      <li>在 <code>APIs &amp; Services → Quotas</code> 给 Photorealistic 3D Tiles 设每日上限，
+        再到 <code>Billing → Budgets</code> 设一个预算告警。</li>
+      <li>本地：把 <code>config.example.js</code> 复制成 <code>config.js</code>，填进去。<br>
+        线上：在 Cloudflare Pages 设环境变量 <code>GOOGLE_MAPS_API_KEY</code>，
+        本页会从 <code>/api/key</code> 取。</li>
+    </ol>
+    <p class="warn">额度：Photorealistic 3D Tiles 每月前 1,000 次 root tile 请求免费，
+      之后约 $6 / 1,000 次，一次请求可撑 3 小时以上的瓦片拉取 —— 个人用基本落在免费额度内。
+      但 key 一旦裸奔被人刷，账单是你的，所以上面第 2、3 步别跳过。</p>
+    <p class="warn">读不到 key 时这页就停在这里，不会偷偷发请求。</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.144.0/Build/Cesium/Cesium.js"></script>
+<script src="config.js" onerror="window.__noConfig=true"></script>
+<script src="app.js"></script>
+</body>
+</html>

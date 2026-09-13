@@ -98,6 +98,9 @@ button{font:inherit; color:inherit; cursor:pointer}
   box-shadow:0 8px 22px -10px #000A; user-select:none; -webkit-user-select:none; touch-action:none}
 .walkbtn[hidden]{display:none}
 .walkbtn:active{transform:translateY(1px)}
+.window:fullscreen{border-radius:0; border:0}
+.window:fullscreen canvas{height:100vh}
+.window:-webkit-full-screen canvas{height:100vh}
 .window{position:relative; border:2px solid var(--ink); border-radius:14px 14px var(--r) var(--r);
   overflow:hidden; background:var(--paper-3); box-shadow:var(--shadow)}
 #street{display:block; width:100%; height:clamp(230px,44vh,480px)}
@@ -265,6 +268,7 @@ button{font:inherit; color:inherit; cursor:pointer}
         <button id="v2d" aria-pressed="true">侧视</button>
         <button id="v3d" aria-pressed="false">街头第一视角</button>
       </span>
+      <button class="tinybtn" id="fsBtn" hidden>全屏</button>
       <button class="tinybtn" id="sound" aria-pressed="false" title="合成环境音">环境音</button>
       <button class="tinybtn" id="openJournal">手账</button>
     </div>
@@ -1066,7 +1070,7 @@ $('#askClaude').style.display='none';
    模拟
    ============================================================ */
 let CUR=CITIES[0], WX='clear', clock=cityLocal(CUR);
-const cam={m:0,target:0,moving:false,phase:0,rush:0,prev:0};
+const cam={m:0,target:0,moving:false,phase:0,rush:0,prev:0,kick:0};
 let live=false, queue=[], curMoment=null;
 
 function selectCity(id,silent){
@@ -1087,17 +1091,18 @@ function addMeters(m,label){
   const st=cityState(CUR.id), total=CUR.wps[CUR.wps.length-1].m;
   if(st.m>=total){ toast('这条路线已经走完了 — 换座城市'); return }
   const before=cam.target;
+  MOTION.owns=false;
   cam.target=Math.min(total,cam.target+m);
   st.m=cam.target; addToday(cam.target-before);
   bumpStreak();
   toast(label+' · +'+fmt(m)+' m');
   save();
 }
-function addSteps(n){
+function addSteps(n,stride){
   const st=cityState(CUR.id), total=CUR.wps[CUR.wps.length-1].m;
   if(st.m>=total) return;
   const before=cam.target;
-  cam.target=Math.min(total,cam.target+n*STEP_M);
+  cam.target=Math.min(total,cam.target+n*(stride||STEP_M));
   st.m=cam.target; addToday(cam.target-before);
   bumpStreak();
   const mm=Math.floor(cam.target);
@@ -1124,6 +1129,7 @@ function frame(now){
     else if(!queue.length&&!curMoment){ setLive(false); toast('走到终点了') }
   }
   const diff=cam.target-cam.m;
+  if(cam.kick>0) cam.kick=Math.max(0,cam.kick-dt*2.4);
   if(diff>0.02){
     const v=Math.max(WALK_MPS,diff*2.0);
     const step=Math.min(diff,v*dt);
@@ -1580,7 +1586,8 @@ const V3={
     const mv=e=>{ if(!drag) return;
       if(MOTION.steering) MOTION.head0=(MOTION.head0||0)-(e.clientX-px)*0.22;
       else this.yaw-=(e.clientX-px)*0.0038;
-      this.pitch-=(e.clientY-py)*0.0034;
+      if(MOTION.tilting) MOTION.beta0=(MOTION.beta0||0)+(e.clientY-py)*0.20;
+      else this.pitch-=(e.clientY-py)*0.0034;
       this.pitch=clamp(this.pitch,-0.95,1.05); px=e.clientX; py=e.clientY };
     const up=()=>{drag=false};
     cv.addEventListener('pointerdown',dn); cv.addEventListener('pointermove',mv);
@@ -1748,7 +1755,9 @@ const V3={
     if(!this.ready) return;
     if(this.cityId!==CUR.id||this.night!==isNight(clock.hh)) this.rebuild();
     this.stream();
-    const bob=cam.moving?Math.sin(cam.phase*1.9)*0.035:0;
+    const bob=(MOTION.on&&MOTION.footfall)
+      ? -0.055*Math.sin(Math.PI*(1-clamp(cam.kick,0,1)))
+      : (cam.moving?Math.sin(cam.phase*1.9)*0.035:0);
     const sway=cam.moving?Math.sin(cam.phase*0.95)*0.06:0;
     this.cam.position.set(cam.m,EYE+bob,ROAD_H+SW_W*0.40+sway);
     this.cam.rotation.y=-Math.PI/2+this.yaw;
@@ -1836,7 +1845,8 @@ const MOTION={
   on:false, steering:false, gotMotion:false, gotOrient:false,
   smooth:9.8, base:9.8, armed:false, lastStep:0, hist:[],
   thresh:1.15, head0:null, headNow:0, invert:false, yawTarget:0,
-  wake:null, probe:null, peak:0,
+  beta0:null, betaNow:0, pitchTarget:0, tilting:false,
+  wake:null, probe:null, peak:0, t0:0, footfall:false, stride:STEP_M,
 
   supported(){ return typeof window.DeviceMotionEvent!=='undefined' },
 
@@ -1858,9 +1868,17 @@ const MOTION={
     this.start();
   },
 
+  cadence(){
+    const now=performance.now();
+    while(this.hist.length&&now-this.hist[0]>6000) this.hist.shift();
+    return Math.round(this.hist.length/6*60);
+  },
+  strideFor(){ return clamp(0.42+(this.cadence()-55)*0.0042,0.42,0.95) },
+
   start(){
     this.on=true; this.gotMotion=false; this.gotOrient=false;
-    this.hist=[]; this.head0=null; this.smooth=9.8; this.base=9.8;
+    this.hist=[]; this.head0=null; this.beta0=null; this.t0=performance.now();
+    this.smooth=9.8; this.base=9.8; this.footfall=false;
     this._m=e=>this.onMotion(e); this._o=e=>this.onOrient(e);
     window.addEventListener('devicemotion',this._m);
     window.addEventListener('deviceorientationabsolute',this._o);
@@ -1908,10 +1926,16 @@ const MOTION={
     this.base+=(this.smooth-this.base)*0.016;
     const d=this.smooth-this.base, now=performance.now();
     this.peak=Math.max(this.peak*0.9,Math.abs(d));
+    if(now-this.t0<900) return;                       // 刚打开先让基线稳下来
+    if(Math.abs(d)>9) { this.armed=false; return }     // 甩手机不算走路
     if(!this.armed&&d>this.thresh&&now-this.lastStep>255){
-      this.armed=true; this.lastStep=now; this.hist.push(now);
-      if(this.hist.length>24) this.hist.shift();
-      addSteps(1);
+      const gap=now-this.lastStep;
+      this.armed=true; this.lastStep=now;
+      this.hist.push(now); if(this.hist.length>40) this.hist.shift();
+      this.footfall=true; cam.kick=1;
+      this.stride=(gap<2400)?this.strideFor():STEP_M;  // 接得上前一步才按步频算步幅
+      this.owns=true; addSteps(1,this.stride);
+      if(navigator.vibrate&&this.hist.length%20===0) navigator.vibrate(12);
       const w=$('#mBarWrap'); w.classList.add('hit'); setTimeout(()=>w.classList.remove('hit'),110);
     }else if(this.armed&&d<this.thresh*0.45){ this.armed=false }
   },
@@ -1924,36 +1948,76 @@ const MOTION={
     this.gotOrient=true; this.headNow=h;
     if(this.head0==null) this.head0=h;
     let d=((h-this.head0+540)%360)-180;
+    if(Math.abs(d)<2.5) d=0;                          // 小幅晃动不算转身
     this.yawTarget=(this.invert?-d:d)*Math.PI/180;
     this.steering=true;
+    if(e.beta!=null){
+      this.betaNow=e.beta;
+      if(this.beta0==null) this.beta0=e.beta;
+      let b=this.beta0-e.beta;
+      if(Math.abs(b)<3) b=0;
+      this.pitchTarget=clamp(b*Math.PI/180,-0.85,1.0);
+      this.tilting=true;
+    }
   },
 
-  calibrate(){ this.head0=this.headNow; this.yawTarget=0; toast('朝向已校准') },
+  calibrate(){
+    this.head0=this.headNow; this.beta0=this.betaNow;
+    this.yawTarget=0; this.pitchTarget=0;
+    toast('就以现在这个姿势当正前方');
+  },
 
   tick(dt){
     if(!this.on) return;
     const now=performance.now();
-    while(this.hist.length&&now-this.hist[0]>6000) this.hist.shift();
-    const spm=Math.round(this.hist.length/6*60);
+    const spm=this.cadence();
+    if(now-this.lastStep>1400){                       // 不踏了就别再往前滑
+      this.footfall=false;
+      if(this.owns&&cam.target-cam.m>0.5) cam.target=cam.m+0.5;
+    }
     $('#mBar').style.width=clamp(this.peak/2.6*100,0,100)+'%';
     if(this.gotMotion&&now-(this._said||0)>500){
       this._said=now;
       const moving=now-this.lastStep<1800;
       const dir=this.steering?' · 朝向 <b>'+Math.round(((this.headNow-this.head0+540)%360)-180)+'°</b>':' · 无方向传感器';
-      this.say((moving?'步频 <b>'+spm+'</b> 步/分 · 最近 6 秒 <b>'+this.hist.length+'</b> 步'
+      this.say((moving?'步频 <b>'+spm+'</b> 步/分 · 步幅 <b>'+this.stride.toFixed(2)+'</b> m'
                      :'站着没动 · 踏起来就走')+dir);
     }
-    if(this.steering&&V3.on){
-      V3.yaw+=(this.yawTarget-V3.yaw)*Math.min(1,dt*6);
+    if(V3.on){
+      const k=Math.min(1,dt*6);
+      if(this.steering) V3.yaw+=(this.yawTarget-V3.yaw)*k;
+      if(this.tilting)  V3.pitch+=(this.pitchTarget-V3.pitch)*k;
     }
   }
 };
 if(MOTION.supported()) $('#motionBox').hidden=false;
 $('#motionBtn').onclick=()=>MOTION.toggle();
 $('#mCal').onclick=()=>MOTION.calibrate();
-$('#mInv').onclick=e=>{ MOTION.invert=!MOTION.invert;
+$('#mInv').onclick=e=>{ MOTION.invert=!MOTION.invert; S.minv=MOTION.invert; save();
   e.currentTarget.setAttribute('aria-pressed',String(MOTION.invert)) };
-$('#mSens').oninput=e=>{ MOTION.thresh=parseFloat(e.target.value) };
+$('#mSens').oninput=e=>{ MOTION.thresh=parseFloat(e.target.value); S.msens=MOTION.thresh; save() };
+if(typeof S.msens==='number'){ MOTION.thresh=S.msens; $('#mSens').value=S.msens }
+if(S.minv){ MOTION.invert=true; $('#mInv').setAttribute('aria-pressed','true') }
+
+/* ---------- 全屏 ---------- */
+(function(){
+  const el=$('.window'), btn=$('#fsBtn');
+  const can=document.fullscreenEnabled||document.webkitFullscreenEnabled;
+  if(!can||!el.requestFullscreen&&!el.webkitRequestFullscreen) return;
+  btn.hidden=false;
+  btn.onclick=()=>{
+    const fs=document.fullscreenElement||document.webkitFullscreenElement;
+    if(fs){ (document.exitFullscreen||document.webkitExitFullscreen).call(document) }
+    else{ (el.requestFullscreen||el.webkitRequestFullscreen).call(el).catch(()=>toast('这个环境不让全屏')) }
+  };
+  const sync=()=>{
+    const fs=!!(document.fullscreenElement||document.webkitFullscreenElement);
+    btn.textContent=fs?'退出全屏':'全屏';
+    setTimeout(()=>{ resize(); V3.resize() },120);
+  };
+  document.addEventListener('fullscreenchange',sync);
+  document.addEventListener('webkitfullscreenchange',sync);
+})();
 
 /* ---------- 启动 ---------- */
 buildTabs(); buildActs(); loadLocal();
