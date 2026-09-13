@@ -171,11 +171,13 @@ https://<你的用户名>.github.io/virtual-explorer/*
 
 ### 开起来
 
-1. `Settings → Actions → General`，确认 Actions 是打开的
-2. 加上面那个 Secret（不加也能构建，真实地球版会停在配置说明页）
-3. 推一次代码，或在 Actions 页面手动跑一次 `Deploy to GitHub Pages`
-4. workflow 里带了 `enablement: true`，会自己把 Pages 打开；
-   若失败就去 `Settings → Pages` 把 Source 选成 `GitHub Actions`
+1. **先手动打开 Pages**：`Settings → Pages` → Source 选 **GitHub Actions**。
+   这一步只能手动点 —— 创建 Pages 站点需要仓库管理员权限，
+   workflow 的 `GITHUB_TOKEN` 没有这个权限，所以自动创建会报
+   `Resource not accessible by integration`。点一次，以后就不用管了。
+2. `Settings → Actions → General`，确认 Actions 是打开的
+3. 加上面那个 Secret（不加也能构建，真实地球版会停在配置说明页）
+4. 推一次代码，或在 Actions 页面手动跑一次 `Deploy to GitHub Pages`
 
 ### 本地预览发布版
 

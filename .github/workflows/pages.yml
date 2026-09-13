@@ -1,5 +1,10 @@
 name: Deploy to GitHub Pages
 
+# 第一次用之前，先手动打开一次 Pages：
+#   仓库 Settings → Pages → Source 选 "GitHub Actions"
+# （创建 Pages 站点需要仓库管理员权限，workflow 的 token 没有，
+#   所以这一步只能手动点，点一次以后就不用管了。）
+
 on:
   push:
     branches: ['**']
@@ -18,19 +23,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - uses: actions/checkout@v5
       - name: Build _site
         env:
           # 在 Settings → Secrets and variables → Actions 里加 GOOGLE_MAPS_API_KEY。
           # 没设也能构建：真实地球版会停在配置说明页。
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: node tools/build-pages.mjs
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
