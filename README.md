@@ -23,6 +23,17 @@
   可校准、可左右反向。读不到传感器时明确说明并退回手动。
 - **手账**：站点戳、明信片、累计公里数、连续天数。进度存在 artifact 的 `db` 里。
 
+## 两个版本
+
+| | 在哪 | 特点 |
+|---|---|---|
+| 程序生成街景版 | 根目录 `index.html` | 开箱即用、街道细节清楚、永远免费 |
+| 真实地球版 | `selfhost/` | Google 真实三维影像，需要自己的 API key 和一个域名 |
+
+`tools/build-pages.mjs` 把两个版本打成一个静态站（`_site/`），
+`.github/workflows/pages.yml` 推送后自动发布到 GitHub Pages。
+详见 `selfhost/README.md`。
+
 ## 结构
 
 单文件 `index.html`：CSS token（双色 riso 印刷风，明暗双主题）→ 城市数据 →

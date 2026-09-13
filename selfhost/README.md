@@ -108,3 +108,72 @@ selfhost/
 ├── config.example.js     本地 key（复制成 config.js）
 └── functions/api/key.js  Cloudflare Pages Function：按来源发 key
 ```
+
+---
+
+## 托管在 GitHub Pages
+
+仓库里已经带了 `.github/workflows/pages.yml` 和 `tools/build-pages.mjs`。
+推上去就会自动构建并发布：
+
+```
+https://<你的用户名>.github.io/virtual-explorer/         程序生成街景版
+https://<你的用户名>.github.io/virtual-explorer/earth/   真实地球版
+```
+
+### 三件必须先知道的事
+
+**1. private 仓库要 GitHub Pro。**
+GitHub Pages 对私有仓库是付费功能（Pro 及以上）。这个仓库现在是 private，
+所以三选一：把仓库设成 public ／ 升级 Pro ／ 改用 Cloudflare Pages（免费，私有仓库也行）。
+
+**2. Pages 是纯静态，跑不了 `functions/api/key.js`。**
+所以 key 改成**构建时注入**：在仓库
+`Settings → Secrets and variables → Actions → New repository secret`
+加一个 `GOOGLE_MAPS_API_KEY`。构建时它会被写进 `earth/config.js`，
+**key 不进仓库、不进 git 历史**，但会出现在发布出去的 JS 里 —— 静态托管绕不开这一点。
+
+**3. 所以 referrer 限制在这里是强制的，不是可选的。**
+Cloud Console → 你的 key → 应用限制 → HTTP referrer，填：
+
+```
+https://<你的用户名>.github.io/virtual-explorer/*
+```
+
+再配上「只勾 Map Tiles API」和配额上限。做完这三步，key 就算被人看到也用不了。
+
+### 开起来
+
+1. `Settings → Actions → General`，确认 Actions 是打开的
+2. 加上面那个 Secret（不加也能构建，真实地球版会停在配置说明页）
+3. 推一次代码，或在 Actions 页面手动跑一次 `Deploy to GitHub Pages`
+4. workflow 里带了 `enablement: true`，会自己把 Pages 打开；
+   若失败就去 `Settings → Pages` 把 Source 选成 `GitHub Actions`
+
+### 本地预览发布版
+
+```bash
+node tools/build-pages.mjs        # 想带 key：GOOGLE_MAPS_API_KEY=xxx node tools/build-pages.mjs
+npx serve _site
+```
+
+`_site/` 已经在 `.gitignore` 里。
+
+### 为什么根目录那份要重新包一层
+
+artifact 版的 `index.html` 没有 `<!doctype>`／`<html>`／`<head>` —— 发布到 Claude 时平台会包一层外壳。
+静态托管没人替你包，浏览器会掉进怪异模式、布局全歪。
+`tools/build-pages.mjs` 就是补这层外壳，同时给两个版本互相加了跳转链接。
+**artifact 源文件本身没被改动**，两边各自干净。
+
+### 和 Cloudflare Pages 的取舍
+
+| | GitHub Pages | Cloudflare Pages |
+|---|---|---|
+| 私有仓库 | 要 Pro | 免费就行 |
+| serverless 函数 | ✗ | ✓（`functions/api/key.js` 直接能用） |
+| key 怎么进去 | 构建时注入，进 JS | 运行时按来源发放 |
+| 部署 | push 就好 | `npx wrangler pages deploy` 或连 Git |
+
+说到底两边的 key 都会到浏览器里 —— **真正拦住盗用的永远是 referrer 限制 + 配额上限**，
+不是托管平台。GitHub Pages 完全够用。
