@@ -1,0 +1,1378 @@
+<title>街区兑换所</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;700&display=swap">
+<style>
+:root{
+  --ink:#16243F; --ink-2:#3E5C7E; --ink-3:#7C93AB;
+  --paper:#E6E7E0; --paper-2:#DEE0D7; --paper-3:#D2D5C9;
+  --rule:#BFC5B8;
+  --fluoro:#FF5A36; --fluoro-soft:#FF5A3622;
+  --gold:#C98F1E; --moss:#5F7A54;
+  --grain-blend:multiply; --grain-op:.075;
+  --shadow:0 1px 0 #FFFFFF88, 0 10px 30px -18px #16243F55;
+  --r:3px;
+  --f-display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Noto Serif SC",Songti SC,serif;
+  --f-mono:"DM Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ink:#DCE3DC; --ink-2:#9FB4C6; --ink-3:#6C8399;
+    --paper:#0C1420; --paper-2:#121D2C; --paper-3:#182739;
+    --rule:#26384D;
+    --fluoro:#FF6B4A; --fluoro-soft:#FF6B4A26;
+    --gold:#E8B44A; --moss:#8BAC7C;
+    --grain-blend:screen; --grain-op:.05;
+    --shadow:0 0 0 #0000, 0 14px 34px -20px #000;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#DCE3DC; --ink-2:#9FB4C6; --ink-3:#6C8399;
+  --paper:#0C1420; --paper-2:#121D2C; --paper-3:#182739;
+  --rule:#26384D;
+  --fluoro:#FF6B4A; --fluoro-soft:#FF6B4A26;
+  --gold:#E8B44A; --moss:#8BAC7C;
+  --grain-blend:screen; --grain-op:.05;
+  --shadow:0 0 0 #0000, 0 14px 34px -20px #000;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:90;
+  opacity:var(--grain-op); mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:18px; padding-block:18px 40px}
+a{color:inherit}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--fluoro); outline-offset:2px}
+
+/* ---------- masthead ---------- */
+.mast{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  border-bottom:2px solid var(--ink); padding-bottom:10px}
+.mast h1{font-family:var(--f-display); font-weight:800; font-size:clamp(28px,5.4vw,42px);
+  letter-spacing:-.015em; margin:0; line-height:1}
+.eyebrow{font-family:var(--f-display); font-weight:500; text-transform:uppercase;
+  letter-spacing:.16em; font-size:11px; color:var(--ink-2); margin:0 0 6px}
+.mast-r{display:flex; gap:8px; align-items:center}
+.tinybtn{background:none; border:1px solid var(--rule); border-radius:var(--r);
+  padding:6px 11px; font-family:var(--f-mono); font-size:12px; color:var(--ink-2);
+  transition:border-color .15s, color .15s}
+.tinybtn:hover{border-color:var(--ink); color:var(--ink)}
+.tinybtn[aria-pressed="true"]{border-color:var(--fluoro); color:var(--fluoro)}
+
+/* ---------- city tabs ---------- */
+.cities{display:flex; gap:2px; overflow-x:auto; margin:14px 0 12px; padding-bottom:2px;
+  scrollbar-width:thin}
+.city-tab{flex:0 0 auto; background:none; border:0; border-bottom:2px solid transparent;
+  padding:7px 12px 8px; text-align:left; opacity:.55; transition:opacity .15s}
+.city-tab:hover{opacity:.85}
+.city-tab[aria-selected="true"]{opacity:1; border-bottom-color:var(--fluoro)}
+.city-tab .zh{display:block; font-weight:600; font-size:14px; letter-spacing:.02em}
+.city-tab .la{display:block; font-family:var(--f-mono); font-size:10.5px; color:var(--ink-2);
+  letter-spacing:.04em; margin-top:1px}
+
+/* ---------- the window ---------- */
+.window{position:relative; border:2px solid var(--ink); border-radius:14px 14px var(--r) var(--r);
+  overflow:hidden; background:var(--paper-3); box-shadow:var(--shadow)}
+#street{display:block; width:100%; height:clamp(230px,44vh,480px)}
+.reg{position:absolute; width:13px; height:13px; opacity:.5; pointer-events:none; z-index:3}
+.reg::before,.reg::after{content:""; position:absolute; background:var(--fluoro)}
+.reg::before{left:6px; top:0; width:1px; height:13px}
+.reg::after{top:6px; left:0; height:1px; width:13px}
+.reg.tl{left:8px; top:8px} .reg.tr{right:8px; top:8px}
+.hud{position:absolute; z-index:2; font-family:var(--f-mono); font-size:11px;
+  letter-spacing:.05em; color:#F2EFE6; text-shadow:0 1px 3px #0009}
+.hud.lt{left:14px; top:12px}
+.hud.rt{right:14px; top:12px; text-align:right}
+.hud b{font-weight:500; color:#fff}
+.hud .dim{opacity:.72}
+.pace{position:absolute; right:14px; bottom:12px; z-index:2; display:flex; align-items:center; gap:7px;
+  font-family:var(--f-mono); font-size:11px; color:#F2EFE6; text-shadow:0 1px 3px #0009}
+.dot{width:7px; height:7px; border-radius:50%; background:var(--fluoro); opacity:.35}
+.walking .dot{opacity:1; animation:pulse 1.15s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.7)}50%{transform:scale(1.25)}}
+
+/* ---------- moment card ---------- */
+.moment{position:absolute; z-index:4; left:14px; right:14px; bottom:14px;
+  background:var(--paper); border:1px solid var(--ink); border-left:4px solid var(--fluoro);
+  padding:13px 14px 12px; max-width:460px;
+  box-shadow:0 14px 34px -20px #000A;
+  transform:translateY(14px); opacity:0; transition:transform .34s cubic-bezier(.2,.8,.3,1), opacity .34s;
+  pointer-events:none}
+.moment.show{transform:none; opacity:1; pointer-events:auto}
+.moment .mk{font-family:var(--f-mono); font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.13em; color:var(--ink-2); display:flex; justify-content:space-between; gap:10px}
+.moment p{margin:7px 0 10px; font-size:14.5px; line-height:1.75}
+.moment .acts{display:flex; gap:7px; flex-wrap:wrap}
+.moment.wp{border-left-color:var(--gold)}
+
+/* ---------- deck ---------- */
+.deck{display:grid; grid-template-columns:1.05fr .95fr; gap:16px; margin-top:16px; align-items:start}
+@media (max-width:720px){.deck{grid-template-columns:1fr}}
+.panel{background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r); padding:14px}
+.panel h2{font-family:var(--f-display); font-weight:700; font-size:13px; text-transform:uppercase;
+  letter-spacing:.12em; margin:0 0 2px; color:var(--ink)}
+.panel .sub{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); margin:0 0 12px}
+
+.acts-grid{display:grid; grid-template-columns:1fr 1fr; gap:7px}
+@media (max-width:420px){.acts-grid{grid-template-columns:1fr}}
+.act{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+  background:var(--paper); border:1px solid var(--rule); border-radius:var(--r);
+  padding:9px 10px; text-align:left; transition:border-color .14s, transform .14s}
+.act:hover{border-color:var(--fluoro); transform:translateY(-1px)}
+.act:active{transform:translateY(0)}
+.act .n{font-size:13.5px; font-weight:600}
+.act .n small{display:block; font-weight:400; font-size:11px; color:var(--ink-3); font-family:var(--f-mono)}
+.act .v{font-family:var(--f-mono); font-size:11.5px; color:var(--fluoro); white-space:nowrap}
+.custom{display:flex; gap:7px; margin-top:9px}
+.custom input{flex:1; min-width:0; background:var(--paper); border:1px solid var(--rule);
+  border-radius:var(--r); padding:9px 10px; font-family:var(--f-mono); font-size:13px; color:var(--ink)}
+.btn{background:var(--ink); color:var(--paper); border:1px solid var(--ink); border-radius:var(--r);
+  padding:9px 14px; font-family:var(--f-mono); font-size:12px; letter-spacing:.04em;
+  transition:opacity .14s}
+.btn:hover{opacity:.85}
+.btn.ghost{background:none; color:var(--ink-2); border-color:var(--rule)}
+.btn.ghost:hover{border-color:var(--ink); color:var(--ink)}
+.btn.live[aria-pressed="true"]{background:var(--fluoro); border-color:var(--fluoro); color:#1A0D07}
+.livebar{display:flex; gap:7px; margin-top:9px; align-items:center}
+.mini{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px;
+  padding-top:12px; border-top:1px dashed var(--rule)}
+.mini .k{font-family:var(--f-mono); font-size:10px; letter-spacing:.1em; color:var(--ink-3)}
+.mini .v{font-family:var(--f-display); font-weight:700; font-size:20px; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums; line-height:1.25}
+.mini .v i{font-style:normal; font-size:11px; font-weight:500; color:var(--ink-2); margin-left:2px}
+.livebar .hint{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); line-height:1.35}
+
+/* ---------- route ---------- */
+.route-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+.route-name{font-family:var(--f-display); font-weight:700; font-size:17px; letter-spacing:-.01em}
+.route-total{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); white-space:nowrap}
+.bigdist{font-family:var(--f-display); font-weight:800; font-size:clamp(34px,7vw,46px);
+  letter-spacing:-.03em; line-height:1; margin:12px 0 2px; font-variant-numeric:tabular-nums}
+.bigdist .u{font-size:15px; font-weight:500; letter-spacing:0; color:var(--ink-2); margin-left:4px}
+.ofline{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); margin-bottom:12px}
+.track{position:relative; height:5px; background:var(--paper-3); border-radius:99px; margin:16px 0 8px}
+.track .fill{position:absolute; inset:0 auto 0 0; background:var(--fluoro); border-radius:99px;
+  transition:width .5s cubic-bezier(.2,.8,.3,1)}
+.tick{position:absolute; top:-5px; width:1px; height:15px; background:var(--ink-3)}
+.tick.done{background:var(--gold); width:2px}
+.wps{list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:0}
+.wps li{display:flex; gap:10px; align-items:baseline; padding:5px 0; border-bottom:1px dashed var(--rule)}
+.wps li:last-child{border-bottom:0}
+.wps .m{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); width:52px; flex:0 0 auto;
+  font-variant-numeric:tabular-nums; text-align:right}
+.wps .nm{flex:1; font-size:13px}
+.wps .nm small{display:block; font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3)}
+.wps .st{font-family:var(--f-mono); font-size:10px; letter-spacing:.08em; white-space:nowrap}
+.wps li.done .st{color:var(--gold)} .wps li.done .nm{font-weight:600}
+.wps li.next .st{color:var(--fluoro)}
+.wps li.far{opacity:.5}
+
+/* ---------- journal ---------- */
+.jwrap{position:fixed; inset:0; z-index:60; display:none}
+.jwrap.open{display:block}
+.scrim{position:absolute; inset:0; background:#0C1420AA; backdrop-filter:blur(2px)}
+.journal{position:absolute; right:0; top:0; bottom:0; width:min(520px,100%);
+  background:var(--paper); border-left:2px solid var(--ink); overflow-y:auto;
+  padding:20px 20px 40px; animation:slide .3s cubic-bezier(.2,.8,.3,1)}
+@keyframes slide{from{transform:translateX(24px); opacity:.4}}
+@media (prefers-reduced-motion:reduce){
+  .journal{animation:none} .moment{transition:none} .dot{animation:none}
+}
+.jhead{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+  border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:14px}
+.jhead h2{font-family:var(--f-display); font-weight:800; font-size:26px; margin:0; letter-spacing:-.02em}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px}
+.stat .k{font-family:var(--f-mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-3)}
+.stat .v{font-family:var(--f-display); font-weight:700; font-size:23px; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px; font-weight:500; color:var(--ink-2); margin-left:2px}
+.equiv{font-size:13px; color:var(--ink-2); border-left:3px solid var(--gold); padding-left:10px;
+  margin-bottom:18px; line-height:1.65}
+.jsec{font-family:var(--f-display); font-weight:700; font-size:12px; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--ink-2); margin:20px 0 9px; display:flex; gap:8px; align-items:center}
+.jsec::after{content:""; flex:1; height:1px; background:var(--rule)}
+.stamps{display:flex; flex-wrap:wrap; gap:7px}
+.stamp{border:1.5px dashed var(--gold); color:var(--gold); border-radius:var(--r);
+  padding:5px 9px; font-family:var(--f-mono); font-size:10.5px; letter-spacing:.04em;
+  transform:rotate(-1.4deg)}
+.stamp:nth-child(even){transform:rotate(1.1deg)}
+.cards{display:flex; flex-direction:column; gap:9px}
+.card{background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r); padding:11px 12px}
+.card.ai{border-left:3px solid var(--fluoro)}
+.card .meta{font-family:var(--f-mono); font-size:10px; color:var(--ink-3); letter-spacing:.05em;
+  display:flex; justify-content:space-between; gap:10px; margin-bottom:5px}
+.card p{margin:0; font-size:13.5px; line-height:1.7}
+.empty{font-family:var(--f-mono); font-size:11.5px; color:var(--ink-3); padding:6px 0}
+
+/* ---------- toast ---------- */
+.toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:80;
+  display:flex; flex-direction:column; gap:7px; align-items:center; pointer-events:none}
+.toast{background:var(--ink); color:var(--paper); font-family:var(--f-mono); font-size:12px;
+  padding:8px 14px; border-radius:99px; letter-spacing:.03em;
+  animation:pop .3s cubic-bezier(.2,.9,.3,1)}
+@keyframes pop{from{transform:translateY(8px); opacity:0}}
+.foot{margin-top:22px; padding-top:12px; border-top:1px solid var(--rule);
+  font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); line-height:1.7}
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Virtual Citywalk · 室内换算版</p>
+      <h1>街区兑换所</h1>
+    </div>
+    <div class="mast-r">
+      <button class="tinybtn" id="sound" aria-pressed="false" title="合成环境音">环境音</button>
+      <button class="tinybtn" id="openJournal">手账</button>
+    </div>
+  </header>
+
+  <nav class="cities" id="cities" role="tablist" aria-label="选择城市"></nav>
+
+  <div class="window">
+    <canvas id="street" aria-label="程序生成的街景"></canvas>
+    <i class="reg tl"></i><i class="reg tr"></i>
+    <div class="hud lt"><b id="hudCity">—</b><br><span class="dim" id="hudWhere">—</span></div>
+    <div class="hud rt"><b id="hudClock">—</b><br><span class="dim" id="hudWeather">—</span></div>
+    <div class="pace" id="pace"><i class="dot"></i><span id="paceTxt">停在原地</span></div>
+    <article class="moment" id="moment" aria-live="polite">
+      <div class="mk"><span id="mkKind">街角</span><span id="mkPos">—</span></div>
+      <p id="mkText"></p>
+      <div class="acts">
+        <button class="btn ghost" id="keepCard">收进手账</button>
+        <button class="btn ghost" id="askClaude">让 Claude 写张明信片</button>
+        <button class="btn ghost" id="closeMoment">继续走</button>
+      </div>
+    </article>
+  </div>
+
+  <div class="deck">
+    <section class="panel">
+      <h2>换算台</h2>
+      <p class="sub">室内动一动 → 步数 → 街区。一步按 0.72 m 计。</p>
+      <div class="acts-grid" id="actsGrid"></div>
+      <div class="custom">
+        <input id="customSteps" type="number" min="1" max="60000" inputmode="numeric"
+               placeholder="手表 / 手机里的步数" aria-label="自定义步数">
+        <button class="btn" id="addCustom">兑换</button>
+      </div>
+      <div class="livebar">
+        <button class="btn live" id="liveBtn" aria-pressed="false">实时同行</button>
+        <span class="hint">打开后按 1.35 m/s 真实步速前进 —<br>在家踱步时挂着它，街景会跟着走。</span>
+      </div>
+      <div class="mini">
+        <div><div class="k">今天</div><div class="v" id="mToday">0<i>m</i></div></div>
+        <div><div class="k">这座城市</div><div class="v" id="mCity">0<i>m</i></div></div>
+        <div><div class="k">累计</div><div class="v" id="mAll">0.0<i>km</i></div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>今日路线</h2>
+      <p class="sub" id="routeSub">—</p>
+      <div class="route-head">
+        <span class="route-name" id="routeName">—</span>
+        <span class="route-total" id="routeTotal">—</span>
+      </div>
+      <div class="bigdist"><span id="distNum">0</span><span class="u">m</span></div>
+      <div class="ofline" id="ofLine">—</div>
+      <div class="track" id="track"><div class="fill" id="fill" style="width:0%"></div></div>
+      <ul class="wps" id="wps"></ul>
+    </section>
+  </div>
+
+  <p class="foot">
+    路线、站点与距离取自各城市真实街道走法；天空按该城市<b>当地时间</b>渲染，所以你可能在深夜走进里斯本的下午。<br>
+    进度存在这张页面里，随时回来接着走。
+  </p>
+</div>
+
+<div class="jwrap" id="jwrap">
+  <div class="scrim" id="scrim"></div>
+  <aside class="journal" role="dialog" aria-modal="true" aria-label="手账">
+    <div class="jhead">
+      <div><p class="eyebrow">Field Journal</p><h2>手账</h2></div>
+      <button class="tinybtn" id="closeJournal">关闭</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">累计</div><div class="v" id="stTotal">0<small>km</small></div></div>
+      <div class="stat"><div class="k">抵达站点</div><div class="v" id="stStamps">0</div></div>
+      <div class="stat"><div class="k">连续天数</div><div class="v" id="stStreak">0</div></div>
+    </div>
+    <p class="equiv" id="equiv">还没开始。随便点一个活动，第一个街区就来了。</p>
+    <div class="jsec">站点戳</div>
+    <div class="stamps" id="stampBox"><span class="empty">走到第一个站点就有戳了。</span></div>
+    <div class="jsec">明信片</div>
+    <div class="cards" id="cardBox"><span class="empty">在街角把喜欢的瞬间收进来。</span></div>
+    <div class="jsec">存档</div>
+    <div class="livebar"><button class="btn ghost" id="resetBtn">清空全部进度</button></div>
+  </aside>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ============================================================
+   街区兑换所 — 室内活动换算成真实城市路线上的步行距离
+   ============================================================ */
+
+const STEP_M = 0.72;      // 一步的米数
+const BLOCK_M = 80;       // 一个街区
+const PPM = 15;           // 每米像素（立面层）
+const WALK_MPS = 1.35;    // 真实步速
+
+/* ---------- 城市 ---------- */
+const CITIES = [
+{
+  id:'lisboa', zh:'里斯本', la:'Lisboa', tz:'Europe/Lisbon',
+  route:'Cais do Sodré → Senhora do Monte', sub:'沿河而起，一路爬到城市最高的观景台',
+  style:'tile', skyline:'hills', tree:'jacaranda', lamp:'iron', wires:true,
+  walls:['#E8DCC6','#D3C7A8','#C6D6D2','#E3C9B6','#C9D4E0','#EFE3D0','#D8C0C4'],
+  roof:'#A5583C', trim:'#3F5468', shopHue:['#2E5A52','#8C3B34','#3B4E75','#7A5230'],
+  weather:[['clear',.55],['haze',.3],['drizzle',.15]],
+  signs:['PASTELARIA','TABACARIA','A GINJINHA','PEIXARIA','BARBEARIA','MERCEARIA','ADEGA','TASCA'],
+  wps:[
+    {m:0,zh:'索德烈码头',la:'Cais do Sodré'},
+    {m:380,zh:'商业广场',la:'Praça do Comércio'},
+    {m:760,zh:'奥古斯塔街',la:'Rua Augusta'},
+    {m:1150,zh:'罗西乌广场',la:'Rossio'},
+    {m:1600,zh:'卡尔莫修道院',la:'Largo do Carmo'},
+    {m:2150,zh:'里斯本主教堂',la:'Sé de Lisboa'},
+    {m:2700,zh:'太阳门观景台',la:'Portas do Sol'},
+    {m:3400,zh:'山上圣母观景台',la:'Senhora do Monte'}],
+  frag:{
+    sight:['28 路电车从身边蹭过去，车厢木头被几代人的手磨得发亮','晾衣绳横过整条窄巷，床单在风里鼓成帆','立面上的 azulejo 蓝白瓷砖缺了三块，露出底下的砖','一段陡到需要扶墙的石阶，缝里长着野草','电线杆上贴满了 fado 演出的旧海报，一层盖一层'],
+    sound:['某扇窗后有人在练 fado，唱到一半停下来咳嗽','电车的铃铛在下一个弯道响了两下','石板路上行李箱的轮子噼啪作响','远处教堂的钟敲了整点，慢半拍'],
+    smell:['转角 pastelaria 刚出炉，肉桂和柠檬皮的味道压过了柴油味','烤沙丁鱼的油烟从一扇地下室的窗口涌出来','刚拖过的地板，漂白水和石灰的味道'],
+    human:['一位老太太从三楼把钥匙用绳子放下来','两个男人站在坡上争论足球，谁都不肯先走','送货员把箱子一箱箱往坡上扛，停下来擦汗'],
+    find:['脚边一块从墙上掉下来的完整瓷砖','一张被雨泡软的电车票','窗台上晒着的一小盆罗勒']}
+},
+{
+  id:'kyoto', zh:'京都', la:'Kyoto', tz:'Asia/Tokyo',
+  route:'祇園四条 → 銀閣寺', sub:'穿过祇园，沿哲学之道走到东山脚下',
+  style:'machiya', skyline:'mountains', tree:'sakura', lamp:'lantern', wires:false,
+  walls:['#D9CDB8','#C8BBA4','#E2D8C6','#BFB39C','#D2C6AE'],
+  roof:'#3B4048', trim:'#3A2E27', shopHue:['#2F3A36','#6B2C2C','#3A3A45','#5A4632'],
+  weather:[['clear',.45],['haze',.3],['drizzle',.25]],
+  signs:['珈琲','うどん','和菓子','酒','茶房','豆腐','古書','湯'],
+  wps:[
+    {m:0,zh:'祇园四条',la:'Gion-Shijō'},
+    {m:500,zh:'花见小路',la:'Hanamikōji'},
+    {m:950,zh:'八坂神社',la:'Yasaka-jinja'},
+    {m:1500,zh:'知恩院',la:'Chion-in'},
+    {m:2100,zh:'冈崎',la:'Okazaki'},
+    {m:2600,zh:'永观堂',la:'Eikandō'},
+    {m:3000,zh:'哲学之道',la:'Tetsugaku-no-michi'},
+    {m:4200,zh:'银阁寺',la:'Ginkaku-ji'}],
+  frag:{
+    sight:['格子窗后透出一点暖光，看不见里面的人','水渠贴着路边流，水面浮着一片银杏叶','店门口的暖帘被风掀起半角，又落回去','一辆自行车靠在墙边，车筐里放着一把葱','屋檐低得要略微低头，瓦当上是家纹'],
+    sound:['水渠的流水声一直跟着你走','谁家在切菜，刀碰砧板的节奏很稳','木屐踩在石板上，从身后超过去','自动贩卖机在无人的巷子里嗡嗡响'],
+    smell:['酱油和味醂在某口锅里收汁','刚洒过水的石板路，尘土味被压下去了','线香的味道从一扇半开的门里飘出来'],
+    human:['店主蹲在门口擦一块已经很干净的木板','两个学生并排骑车，手都没扶把','一只三花猫占住了整级台阶，不打算让'],
+    find:['一枚掉在苔藓上的银杏叶','从水渠里捞起的一颗光滑石子','贩卖机找零口里别人忘拿的 10 円']}
+},
+{
+  id:'istanbul', zh:'伊斯坦布尔', la:'İstanbul', tz:'Europe/Istanbul',
+  route:'Karaköy → Taksim', sub:'从海边爬上加拉塔，再沿独立大街走到头',
+  style:'stone', skyline:'domes', tree:'plane', lamp:'globe', wires:true,
+  walls:['#D8CFC0','#C2B5A2','#E0D6C4','#B7A894','#CFC0AB','#D9C8B4'],
+  roof:'#8E6A55', trim:'#6B5B4A', shopHue:['#1F4E5F','#8C3A2E','#4A5A3A','#6E4A2E'],
+  weather:[['clear',.5],['haze',.35],['drizzle',.15]],
+  signs:['SİMİT','ÇAY EVİ','ECZANE','BALIK','KİTAP','KUAFÖR','LOKANTA','BAKLAVA'],
+  wps:[
+    {m:0,zh:'卡拉柯伊码头',la:'Karaköy'},
+    {m:350,zh:'加拉塔塔',la:'Galata Kulesi'},
+    {m:800,zh:'隧道口',la:'Tünel'},
+    {m:1200,zh:'加拉塔萨雷',la:'Galatasaray'},
+    {m:1700,zh:'鱼市',la:'Balık Pazarı'},
+    {m:2100,zh:'阿加清真寺',la:'Ağa Camii'},
+    {m:2600,zh:'塔克西姆广场',la:'Taksim Meydanı'}],
+  frag:{
+    sight:['一只海鸥停在广告牌上，居高临下地看你','红色的怀旧电车挤开人群，慢得像散步','卖 simit 的推车上，芝麻圈堆成一座小塔','半开的铁门后面是一整院子的猫','一条侧巷全是灯具店，几百盏灯同时亮着'],
+    sound:['远处宣礼塔开始唤拜，声音从三个方向叠上来','有人在街头弹 bağlama，琴箱磕在膝盖上','茶杯和碟子在托盘上叮当作响，端盘的人小跑'],
+    smell:['炭火烤栗子，焦糖味沉在冷空气里','海风把柴油和咸味一起送上坡','刚出炉的芝麻圈，热得烫手'],
+    human:['卖茶的小哥端着托盘逆着人流穿过去','两个老人在店门口下双陆棋，围了四个观众','擦鞋匠故意掉了刷子，等你捡'],
+    find:['一枚土耳其蓝的邪眼护身符，从摊子上掉下来的','半张昨天的船票','猫在脚边蹭了一下就走了，算你的']}
+},
+{
+  id:'newyork', zh:'纽约', la:'New York', tz:'America/New_York',
+  route:'West Village → Hudson Yards', sub:'穿过褐石老街，上高线公园一路向北',
+  style:'brownstone', skyline:'towers', tree:'plane', lamp:'modern', wires:false,
+  walls:['#7E4A3A','#8C5442','#6E4236','#9A6350','#5E3A30','#A57A63'],
+  roof:'#45403C', trim:'#D8D2C6', shopHue:['#1E3A2E','#2E2E38','#6B2F2F','#33485C'],
+  weather:[['clear',.5],['haze',.25],['drizzle',.25]],
+  signs:['DELI','LAUNDROMAT','BODEGA','COFFEE','PIZZA','HARDWARE','BOOKS','BAR'],
+  wps:[
+    {m:0,zh:'克里斯托弗街',la:'Christopher St'},
+    {m:450,zh:'简街',la:'Jane St'},
+    {m:900,zh:'甘斯沃特街 · 高线入口',la:'Gansevoort St'},
+    {m:1400,zh:'切尔西市场',la:'Chelsea Market'},
+    {m:1900,zh:'第 20 街观景台',la:'W 20th St'},
+    {m:2400,zh:'第 26 街弯道',la:'W 26th St'},
+    {m:3100,zh:'哈德逊广场',la:'Hudson Yards'}],
+  frag:{
+    sight:['消防梯从四楼一路折下来，最后一段悬在半空','人行道的铁栅格上冒出一股白汽','褐石台阶上摆着一盆被晒蔫的绿植','楼顶的木水塔，肚子鼓鼓的','一整面墙的旧广告，字母只剩一半'],
+    sound:['地铁在脚底下过去，铁栅格跟着震','有人在消防梯上练小号，吹了一半就停','出租车按了一声喇叭，没人理'],
+    smell:['洗衣房排风口喷出的烘干机味，甜得发腻','街角热狗摊的酸黄瓜和洋葱','雨后的柏油，有点像铅笔盒'],
+    human:['一个人同时遛五条狗，绳子没有一根缠住','咖啡店门口有人站着打电话，说了十分钟"所以呢"','送餐员把车锁在消防栓上，跑进去三秒又出来'],
+    find:['地上一张还没过期的地铁卡','台阶边有人放了一箱免费旧书','水洼里映出一整栋楼']}
+},
+{
+  id:'reykjavik', zh:'雷克雅未克', la:'Reykjavík', tz:'Atlantic/Reykjavik',
+  route:'Hallgrímskirkja → Grandi', sub:'从山顶教堂一路下到旧港的冷风里',
+  style:'corrugated', skyline:'peaks', tree:'none', lamp:'modern', wires:false,
+  walls:['#C2453C','#3E6E8E','#E0D8C8','#4E7D63','#D9A03C','#8A5A8C','#B8B2A6'],
+  roof:'#4A4E52', trim:'#F0EDE6', shopHue:['#22485E','#7A3730','#3A5A46','#4A4356'],
+  weather:[['drizzle',.45],['haze',.3],['clear',.25]],
+  signs:['BAKARÍ','KAFFI','BÓKABÚÐ','SUNDLAUG','FISKUR','VÍNBÚÐ','PYLSUR','ULL'],
+  wps:[
+    {m:0,zh:'哈尔格林姆教堂',la:'Hallgrímskirkja'},
+    {m:400,zh:'彩虹街',la:'Skólavörðustígur'},
+    {m:850,zh:'劳加维格街',la:'Laugavegur'},
+    {m:1300,zh:'城市湖',la:'Tjörnin'},
+    {m:1800,zh:'哈帕音乐厅',la:'Harpa'},
+    {m:2300,zh:'旧港',la:'Gamla höfnin'},
+    {m:2800,zh:'格兰迪',la:'Grandi'}],
+  frag:{
+    sight:['波纹铁皮房子一栋比一栋鲜艳，像有人赌气刷的','路面被雨洗得发亮，倒映着整条街的颜色','一只北极燕鸥贴着屋顶滑过去','窗台上放着蜡烛，下午三点就点上了','某扇门上贴着手写的告示，全是重音符号'],
+    sound:['风从两栋房子之间挤过去，尖了一下','远处有人在关车门，声音传得特别远','雨点打在铁皮屋顶上，密集又均匀'],
+    smell:['空气里有一点硫磺味，是自来水带的','面包房的豆蔻卷刚出炉','靠近港口时，海腥味突然变浓'],
+    human:['有人只穿毛衣站在门口抽烟，冻得跺脚','婴儿车停在咖啡馆外面，孩子在里面睡着，没人担心','两个人推着一箱鱼往冷库走'],
+    find:['一块黑色的火山岩，被踢到路边','门口毛毯上晒着的一只羊毛手套','水洼里一片完整的天空']}
+},
+{
+  id:'buenosaires', zh:'布宜诺斯艾利斯', la:'Buenos Aires', tz:'America/Argentina/Buenos_Aires',
+  route:'San Telmo → Caminito', sub:'从旧货市场沿 Defensa 街走进彩色的 La Boca',
+  style:'belleepoque', skyline:'flat', tree:'plane', lamp:'globe', wires:true,
+  walls:['#D8C9A8','#C2AD88','#E2D6BE','#B09878','#DCCBB2','#C9B9D0'],
+  roof:'#7A6A58', trim:'#4A4438', shopHue:['#1F4A6B','#8C3A2E','#3F5F3A','#7A4A1E'],
+  weather:[['clear',.55],['haze',.3],['drizzle',.15]],
+  signs:['CAFÉ','PARRILLA','ANTIGÜEDADES','LIBRERÍA','HELADOS','PANADERÍA','VINOS','KIOSCO'],
+  wps:[
+    {m:0,zh:'多雷戈广场',la:'Plaza Dorrego'},
+    {m:400,zh:'防卫街',la:'Calle Defensa'},
+    {m:900,zh:'莱萨马公园',la:'Parque Lezama'},
+    {m:1400,zh:'马丁·加西亚大道',la:'Av. Martín García'},
+    {m:2000,zh:'旧吊桥',la:'Puente Transbordador'},
+    {m:2500,zh:'罗查湾',la:'Vuelta de Rocha'},
+    {m:2900,zh:'卡米尼托',la:'Caminito'}],
+  frag:{
+    sight:['人行道被百年梧桐的根顶得高低不平','阳台上晾着球衣，蓝白条纹的','旧货摊上摆着一整排单只的银汤匙','墙上手绘的 fileteado 花体字，边缘卷成藤蔓','铁皮房刷成蓝、黄、红，一栋挨一栋'],
+    sound:['某个院子里有人练手风琴，反复同一段','街角有人在跳探戈，音响电流声很重','鸽子从广场上整片飞起来'],
+    smell:['烤肉的木炭味，从中午一直持续到晚上','马黛茶泡开的草味，很轻','梧桐树在热天里的那股青涩味'],
+    human:['两个人站在街心聊天，车绕着他们开过去','咖啡馆的侍者把小勺放在杯口，转了个角度','老太太带着一把藤椅出来，坐在自家门口'],
+    find:['旧货摊角落里一枚 1947 年的硬币','掉在长椅上的探戈演出传单','一片梧桐叶，大得能盖住手掌']}
+}];
+
+/* ---------- 活动换算 ---------- */
+const ACTIVITIES = [
+  {n:'原地踏步', d:'5 分钟', steps:500},
+  {n:'拉伸 / 瑜伽', d:'10 分钟', steps:420},
+  {n:'做饭 · 家务', d:'15 分钟', steps:700},
+  {n:'爬楼梯', d:'5 层来回', steps:360},
+  {n:'跟着音乐跳', d:'5 分钟', steps:620},
+  {n:'打扫 · 拖地', d:'20 分钟', steps:900}
+];
+
+/* ---------- 小工具 ---------- */
+const $=s=>document.querySelector(s);
+function hash(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function pick(r,arr){return arr[Math.floor(r()*arr.length)]}
+function fmt(n){return Math.round(n).toLocaleString('en-US')}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function cityLocal(city){
+  try{
+    const p=new Intl.DateTimeFormat('zh-CN',{timeZone:city.tz,hour:'2-digit',minute:'2-digit',hour12:false,weekday:'short'}).formatToParts(new Date());
+    const g=t=>(p.find(x=>x.type===t)||{}).value||'';
+    const h=parseInt(g('hour'),10)||0, mi=parseInt(g('minute'),10)||0;
+    return {h, m:mi, hh:h+mi/60, label:g('hour')+':'+g('minute'), wd:g('weekday')};
+  }catch(e){const d=new Date();return {h:d.getHours(),m:d.getMinutes(),hh:d.getHours()+d.getMinutes()/60,label:d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'),wd:''}}
+}
+function weatherOf(city){
+  const day=Math.floor(Date.now()/864e5);
+  const r=rng(hash(city.id+'w'+day));const x=r();let acc=0;
+  for(const [k,p] of city.weather){acc+=p; if(x<acc) return k}
+  return city.weather[0][0];
+}
+const WEATHER_ZH={clear:'晴',haze:'薄雾',drizzle:'细雨'};
+
+/* ============================================================
+   街景渲染器
+   ============================================================ */
+const cvs=$('#street'), ctx=cvs.getContext('2d');
+let CW=0,CH=0,DPR=1, yBase=0, yCurb=0;
+const tileCache=new Map();
+const CITY_B={};
+
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]}
+function mix(a,b,t){const A=hex2rgb(a),B=hex2rgb(b);return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`}
+function shade(h,t){return t<0?mix(h,'#000000',-t):mix(h,'#FFFFFF',t)}
+
+const SKY=[
+ [0,'#0A1020','#16243C'],[5,'#1B2544','#4A4468'],[6.6,'#3A4A72','#E8A67E'],
+ [8,'#7FA8CE','#DBE6EA'],[12,'#6FA3D4','#D2E3EC'],[16,'#74A2CE','#E4DCC9'],
+ [18.4,'#4E6E9E','#F0B27C'],[19.6,'#2E3E63','#C4705A'],[21,'#111B32','#22304A'],[24,'#0A1020','#16243C']];
+function skyColors(hh){
+  for(let i=0;i<SKY.length-1;i++){
+    const a=SKY[i],b=SKY[i+1];
+    if(hh>=a[0]&&hh<=b[0]){const t=(hh-a[0])/(b[0]-a[0]);return [mix(a[1],b[1],t),mix(a[2],b[2],t)]}
+  }
+  return [SKY[0][1],SKY[0][2]];
+}
+function isNight(hh){return hh<6.4||hh>19.3}
+
+function resize(){
+  const r=cvs.getBoundingClientRect(); if(!r.width) return;
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  CW=r.width; CH=r.height;
+  cvs.width=Math.round(CW*DPR); cvs.height=Math.round(CH*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  yBase=Math.round(CH*0.66); yCurb=Math.round(CH*0.82);
+}
+
+/* ---------- 建筑生成 ---------- */
+const FLOORS={lisboa:[3,5],kyoto:[2,2],istanbul:[4,6],newyork:[4,6],reykjavik:[2,3],buenosaires:[2,4]};
+function ensureBuildings(city,upto){
+  let B=CITY_B[city.id]; if(!B){B={list:[],end:0};CITY_B[city.id]=B}
+  let i=B.list.length;
+  while(B.end<upto+140){
+    const r=rng(hash(city.id+'#'+i));
+    const fr=FLOORS[city.id], floors=fr[0]+Math.floor(r()*(fr[1]-fr[0]+1));
+    const w=6.5+r()*7.5;
+    const b={i,x:B.end,w,floors,h:floors*3.25+(city.style==='machiya'?0.8:1.4),
+      wall:city.walls[Math.floor(r()*city.walls.length)],
+      cols:Math.max(2,Math.round(w/2.6)),
+      shop:r()<0.62, sign:city.signs[(i*3+Math.floor(r()*3))%city.signs.length],
+      shopC:city.shopHue[Math.floor(r()*city.shopHue.length)],
+      awn:r()<0.5, seed:hash(city.id+'#'+i), tilt:(r()-.5)*0.5, lit:r()};
+    B.list.push(b); B.end+=w+(r()<0.08?1.2:0); i++;
+  }
+  return B.list;
+}
+
+/* ---------- 单栋立面（离屏缓存） ---------- */
+function buildingTile(city,b,night){
+  const key=city.id+'|'+b.i+'|'+(night?'n':'d');
+  let t=tileCache.get(key); if(t) return t;
+  const bw=Math.ceil(b.w*PPM), bh=Math.ceil(b.h*PPM)+2;
+  const c=document.createElement('canvas'); c.width=bw; c.height=bh;
+  const g=c.getContext('2d'); const r=rng(b.seed);
+  const wall=night?shade(b.wall,-0.42):b.wall;
+  g.fillStyle=wall; g.fillRect(0,0,bw,bh);
+  const dark=shade(wall,-0.18), light=shade(wall,0.14);
+
+  // 墙面肌理
+  if(city.style==='tile'){
+    g.strokeStyle=shade(wall,night?0.06:0.1); g.lineWidth=1;
+    for(let y=6;y<bh;y+=9){g.beginPath();g.moveTo(0,y+.5);g.lineTo(bw,y+.5);g.stroke()}
+    for(let x=6;x<bw;x+=9){g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,bh);g.stroke()}
+    g.fillStyle=shade(wall,night?-0.1:-0.14);
+    for(let y=6;y<bh;y+=18)for(let x=6;x<bw;x+=18){g.beginPath();g.moveTo(x+4.5,y+1);g.lineTo(x+8,y+4.5);g.lineTo(x+4.5,y+8);g.lineTo(x+1,y+4.5);g.closePath();g.fill()}
+  }else if(city.style==='corrugated'){
+    g.strokeStyle=shade(wall,-0.12); g.lineWidth=1;
+    for(let x=0;x<bw;x+=4){g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,bh);g.stroke()}
+    g.strokeStyle=shade(wall,0.16);
+    for(let x=2;x<bw;x+=4){g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,bh);g.stroke()}
+  }else if(city.style==='brownstone'){
+    g.strokeStyle=shade(wall,-0.16); g.lineWidth=1;
+    for(let y=4;y<bh;y+=5){g.beginPath();g.moveTo(0,y+.5);g.lineTo(bw,y+.5);g.stroke()}
+  }else if(city.style==='stone'){
+    g.strokeStyle=shade(wall,-0.1); g.lineWidth=1;
+    for(let y=8;y<bh;y+=11){g.beginPath();g.moveTo(0,y+.5);g.lineTo(bw,y+.5);g.stroke()}
+  }else if(city.style==='machiya'){
+    g.fillStyle=night?shade(city.trim,-0.3):city.trim;
+    g.fillRect(0,0,3,bh); g.fillRect(bw-3,0,3,bh);
+  }else if(city.style==='belleepoque'){
+    g.fillStyle=light; g.fillRect(0,0,4,bh); g.fillRect(bw-4,0,4,bh);
+    g.fillStyle=dark; g.fillRect(0,bh-2,bw,2);
+  }
+
+  // 楼层与窗
+  const gf=Math.round(3.9*PPM);            // 底层高度
+  const upperH=(bh-gf)/Math.max(1,b.floors-1);
+  const cols=b.cols, pad=bw*0.1, cw=(bw-pad*2)/cols;
+  for(let f=0;f<b.floors-1;f++){
+    const fy=bh-gf-(f+1)*upperH+upperH*0.22;
+    const wh=upperH*0.5;
+    for(let c=0;c<cols;c++){
+      const wx=pad+c*cw+cw*0.22, ww=cw*0.56;
+      const onOff=rng(b.seed+f*31+c*7)();
+      const lit=night&&onOff<0.55;
+      g.fillStyle=lit?'#E8B44A':(night?'#141C28':shade(wall,-0.55));
+      if(city.style==='stone'&&f>=b.floors-3){ // 拱窗
+        g.beginPath(); g.moveTo(wx,fy+wh); g.lineTo(wx,fy+ww*0.5);
+        g.arc(wx+ww/2,fy+ww*0.5,ww/2,Math.PI,0); g.lineTo(wx+ww,fy+wh); g.closePath(); g.fill();
+      }else{ g.fillRect(wx,fy,ww,wh) }
+      if(lit){g.globalAlpha=.25;g.fillStyle='#FFD98A';g.fillRect(wx-2,fy-2,ww+4,wh+4);g.globalAlpha=1}
+      // 窗框
+      g.strokeStyle=night?shade(city.trim,-0.1):shade(wall,0.22); g.lineWidth=1;
+      g.strokeRect(wx-.5,fy-.5,ww+1,wh+1);
+      if(city.style==='machiya'){ // 格子
+        g.strokeStyle=night?'#2A2018':shade(city.trim,0.05);
+        for(let k=wx+2;k<wx+ww;k+=3){g.beginPath();g.moveTo(k,fy);g.lineTo(k,fy+wh);g.stroke()}
+      }
+      if(city.style==='belleepoque'||city.style==='tile'){ // 小阳台
+        if(f<2){g.strokeStyle=night?'#1A222E':city.trim; g.lineWidth=1.2;
+          const by=fy+wh;
+          g.beginPath();g.moveTo(wx-3,by+4);g.lineTo(wx+ww+3,by+4);g.stroke();
+          for(let k=wx-3;k<=wx+ww+3;k+=3){g.beginPath();g.moveTo(k,by);g.lineTo(k,by+4);g.stroke()}
+        }
+      }
+    }
+  }
+  // 消防梯
+  if(city.style==='brownstone'&&b.lit<0.6){
+    g.strokeStyle=night?'#0E1620':'#2E2A26'; g.lineWidth=1.4;
+    const fx=bw*0.52;
+    for(let f=0;f<b.floors-1;f++){
+      const fy=bh-gf-(f+1)*upperH+upperH*0.7;
+      g.beginPath();g.moveTo(fx-cw*0.7,fy);g.lineTo(fx+cw*0.7,fy);g.stroke();
+      g.beginPath();g.moveTo(fx-cw*0.7,fy);g.lineTo(fx+cw*0.7,fy-upperH*0.75);g.stroke();
+      for(let k=-3;k<=3;k++){const kx=fx+k*cw*0.22;g.beginPath();g.moveTo(kx,fy);g.lineTo(kx,fy-5);g.stroke()}
+    }
+  }
+  // 底层店面
+  const gy=bh-gf;
+  g.fillStyle=night?shade(b.shopC,-0.35):shade(b.shopC,-0.05);
+  g.fillRect(0,gy,bw,gf);
+  if(b.shop){
+    const win=night?'#F0C86A':'#2A3440';
+    g.fillStyle=win; g.fillRect(bw*0.12,gy+gf*0.28,bw*0.5,gf*0.5);
+    g.fillStyle=night?shade(b.shopC,-0.5):shade(b.shopC,-0.25);
+    g.fillRect(bw*0.7,gy+gf*0.22,bw*0.18,gf*0.78);
+    if(night){g.globalAlpha=.22;g.fillStyle='#FFD98A';g.fillRect(bw*0.06,gy+gf*0.2,bw*0.62,gf*0.66);g.globalAlpha=1}
+    if(b.awn){
+      const ac=shade(b.shopC,night?-0.2:0.18);
+      for(let k=0;k<6;k++){g.fillStyle=k%2?ac:shade(ac,-0.25);g.fillRect(bw*0.08+k*(bw*0.62/6),gy+gf*0.14,bw*0.62/6,gf*0.16)}
+    }
+    g.fillStyle=night?'#F2E6CE':shade(b.shopC,0.55);
+    g.font='600 '+Math.max(7,Math.min(11,bw*0.09))+'px "Bricolage Grotesque","Noto Serif SC",sans-serif';
+    g.textBaseline='top';
+    const label=b.sign; const tw=g.measureText(label).width;
+    if(tw<bw*0.82) g.fillText(label,bw*0.09,gy+gf*0.02);
+  }
+  // 屋顶
+  if(city.style==='machiya'||city.style==='corrugated'){
+    g.fillStyle=night?shade(city.roof,-0.35):city.roof;
+    g.beginPath();
+    if(city.style==='machiya'){g.moveTo(-5,8);g.lineTo(bw+5,8);g.lineTo(bw+2,0);g.lineTo(-2,0)}
+    else{g.moveTo(0,7);g.lineTo(bw,7);g.lineTo(bw,2);g.lineTo(bw/2,-4);g.lineTo(0,2)}
+    g.closePath(); g.fill();
+  }else if(city.style==='tile'){
+    g.fillStyle=night?shade(city.roof,-0.35):city.roof; g.fillRect(-3,0,bw+6,6);
+  }else{
+    g.fillStyle=night?shade(wall,-0.15):shade(wall,0.2); g.fillRect(0,0,bw,4);
+    g.fillStyle=night?shade(wall,-0.3):shade(wall,-0.12); g.fillRect(0,4,bw,2);
+  }
+  if(tileCache.size>90){const k0=tileCache.keys().next().value; tileCache.delete(k0)}
+  tileCache.set(key,c);
+  return c;
+}
+
+/* ---------- 天空 / 远景 ---------- */
+function drawSky(city,hh,weather){
+  const [top,bot]=skyColors(hh);
+  const gd=ctx.createLinearGradient(0,0,0,yBase+10);
+  gd.addColorStop(0,top); gd.addColorStop(1,bot);
+  ctx.fillStyle=gd; ctx.fillRect(0,0,CW,yBase+10);
+  const night=isNight(hh);
+  if(night){
+    const r=rng(hash(city.id+'stars'));
+    ctx.fillStyle='#F3F1E6';
+    for(let i=0;i<70;i++){const x=r()*CW,y=r()*yBase*0.75;ctx.globalAlpha=0.15+r()*0.5;ctx.fillRect(x,y,1.2,1.2)}
+    ctx.globalAlpha=1;
+  }
+  // 日 / 月
+  const t=night?((hh>21?hh-21:hh+3)/9.5):clamp((hh-6.4)/12.9,0,1);
+  const sx=t*CW, sy=yBase-Math.sin(t*Math.PI)*(yBase*0.78)-10;
+  ctx.save();
+  if(night){
+    ctx.globalAlpha=.9; ctx.fillStyle='#EDE7D6';
+    ctx.beginPath(); ctx.arc(sx,sy,9,0,7); ctx.fill();
+    ctx.globalCompositeOperation='destination-out';
+    ctx.beginPath(); ctx.arc(sx+5,sy-3,8,0,7); ctx.fill();
+  }else{
+    const gl=ctx.createRadialGradient(sx,sy,2,sx,sy,60);
+    gl.addColorStop(0,'rgba(255,240,205,.95)'); gl.addColorStop(1,'rgba(255,240,205,0)');
+    ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(sx,sy,60,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,248,225,.95)'; ctx.beginPath(); ctx.arc(sx,sy,11,0,7); ctx.fill();
+  }
+  ctx.restore();
+  // 云
+  const cloudN=weather==='clear'?3:weather==='haze'?7:9;
+  const cr=rng(hash(city.id+'cloud'));
+  ctx.fillStyle=night?'rgba(40,52,74,.6)':(weather==='drizzle'?'rgba(120,126,134,.55)':'rgba(255,253,246,.6)');
+  for(let i=0;i<cloudN;i++){
+    const cx=((cr()*CW*2)-cam.m*0.05*PPM)%(CW*1.6), cy=30+cr()*(yBase*0.4), s=26+cr()*44;
+    const x=cx<-200?cx+CW*1.6:cx;
+    ctx.beginPath();
+    ctx.ellipse(x,cy,s,s*0.34,0,0,7); ctx.ellipse(x+s*0.6,cy+3,s*0.7,s*0.26,0,0,7);
+    ctx.fill();
+  }
+}
+function noiseAt(seedStr,i){return rng(hash(seedStr+':'+i))()}
+function ridge(seedStr,i){ // 平滑起伏
+  const a=noiseAt(seedStr,Math.floor(i)), b=noiseAt(seedStr,Math.floor(i)+1), t=i-Math.floor(i);
+  const s=t*t*(3-2*t); return a+(b-a)*s;
+}
+function drawSkyline(city,hh){
+  const night=isNight(hh);
+  const [,bot]=skyColors(hh);
+  const col=night?mix(bot,'#000814',0.55):mix(bot,'#4A5A6E',0.5);
+  const off=cam.m*0.16;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(0,yBase+4);
+  const kind=city.skyline;
+  if(kind==='hills'||kind==='mountains'||kind==='peaks'){
+    const amp=kind==='peaks'?0.30:kind==='mountains'?0.26:0.18;
+    for(let x=0;x<=CW;x+=6){
+      const i=(x+off*PPM*0.12)/70;
+      let y=yBase-(0.06+ridge(city.id,i)*amp)*CH;
+      if(kind==='peaks'||kind==='mountains') y-=Math.abs(Math.sin(i*1.7))*CH*0.06;
+      ctx.lineTo(x,y);
+    }
+  }else{
+    for(let x=0;x<=CW;x+=4){
+      const i=Math.floor((x+off*PPM*0.12)/46);
+      const h=kind==='towers'?(0.10+noiseAt(city.id,i)*0.40):(0.05+noiseAt(city.id,i)*0.10);
+      ctx.lineTo(x,yBase-h*CH);
+    }
+  }
+  ctx.lineTo(CW,yBase+4); ctx.closePath(); ctx.fill();
+  // 地标剪影
+  const lm=(x,fn)=>{const sx=((x*PPM-off*PPM*0.12)%(CW*2.2)+CW*2.2)%(CW*2.2)-CW*0.2; if(sx>-120&&sx<CW+120) fn(sx)};
+  ctx.fillStyle=col;
+  if(kind==='domes') lm(40,sx=>{
+    ctx.beginPath(); ctx.arc(sx,yBase-CH*0.16,CH*0.075,Math.PI,0); ctx.fill();
+    ctx.fillRect(sx-CH*0.075,yBase-CH*0.16,CH*0.15,CH*0.16);
+    ctx.fillRect(sx-CH*0.13,yBase-CH*0.3,4,CH*0.3); ctx.fillRect(sx+CH*0.11,yBase-CH*0.3,4,CH*0.3);
+    ctx.beginPath();ctx.moveTo(sx-CH*0.128,yBase-CH*0.3);ctx.lineTo(sx-CH*0.11,yBase-CH*0.34);ctx.lineTo(sx-CH*0.092,yBase-CH*0.3);ctx.fill();
+    ctx.beginPath();ctx.moveTo(sx+CH*0.112,yBase-CH*0.3);ctx.lineTo(sx+CH*0.13,yBase-CH*0.34);ctx.lineTo(sx+CH*0.148,yBase-CH*0.3);ctx.fill();
+  });
+  if(kind==='mountains') lm(70,sx=>{ // 五重塔
+    for(let k=0;k<5;k++){const w=CH*(0.075-k*0.009), y=yBase-CH*0.10-k*CH*0.035;
+      ctx.fillRect(sx-w,y,w*2,CH*0.02);
+      ctx.beginPath();ctx.moveTo(sx-w*1.35,y);ctx.lineTo(sx+w*1.35,y);ctx.lineTo(sx+w*0.8,y-CH*0.016);ctx.lineTo(sx-w*0.8,y-CH*0.016);ctx.closePath();ctx.fill();}
+    ctx.fillRect(sx-1.5,yBase-CH*0.30,3,CH*0.04);
+  });
+  if(kind==='hills') lm(55,sx=>{ // 城堡雉堞
+    const y=yBase-CH*0.235;
+    ctx.fillRect(sx-46,y,92,CH*0.06);
+    for(let k=0;k<8;k++) ctx.fillRect(sx-46+k*12,y-7,7,8);
+    ctx.fillRect(sx-58,y-16,14,CH*0.075); ctx.fillRect(sx+44,y-16,14,CH*0.075);
+  });
+  if(kind==='flat') lm(60,sx=>{ // 旧吊桥
+    ctx.fillRect(sx-3,yBase-CH*0.26,3,CH*0.26); ctx.fillRect(sx+52,yBase-CH*0.26,3,CH*0.26);
+    ctx.fillRect(sx-3,yBase-CH*0.27,58,4);
+    for(let k=0;k<6;k++)ctx.fillRect(sx+k*10,yBase-CH*0.26,1.5,CH*0.1);
+  });
+  if(kind==='towers') lm(48,sx=>{ // 水塔
+    ctx.fillRect(sx-9,yBase-CH*0.42,18,CH*0.07);
+    ctx.beginPath();ctx.moveTo(sx-9,yBase-CH*0.42);ctx.lineTo(sx,yBase-CH*0.47);ctx.lineTo(sx+9,yBase-CH*0.42);ctx.fill();
+    ctx.fillRect(sx-7,yBase-CH*0.35,3,CH*0.06); ctx.fillRect(sx+4,yBase-CH*0.35,3,CH*0.06);
+  });
+  if(kind==='peaks'){ // 雪线
+    ctx.globalAlpha=.5; ctx.fillStyle=night?'#5A6B80':'#EDF0F2';
+    for(let x=0;x<=CW;x+=6){const i=(x+off*PPM*0.12)/70; const y=yBase-(0.06+ridge(city.id,i)*0.30)*CH;
+      if(y<yBase-CH*0.2) ctx.fillRect(x,y,6,4)}
+    ctx.globalAlpha=1;
+  }
+}
+
+/* ---------- 街面 / 道具 ---------- */
+function drawGround(city,hh,weather){
+  const night=isNight(hh), wet=weather==='drizzle';
+  const road=night?'#1B2028':(wet?'#4E535A':'#5E6168');
+  ctx.fillStyle=night?'#242A33':'#9A9A94'; ctx.fillRect(0,yBase,CW,yCurb-yBase);   // 对面人行道
+  ctx.fillStyle=road; ctx.fillRect(0,yBase+Math.round((yCurb-yBase)*0.32),CW,CH-yBase);
+  // 近侧人行道
+  const sw=night?'#2E3540':'#BDB9AE';
+  ctx.fillStyle=sw; ctx.fillRect(0,yCurb,CW,CH-yCurb);
+  ctx.fillStyle=night?'#39424E':'#D4CFC2'; ctx.fillRect(0,yCurb,CW,3);
+  // 路面标线
+  ctx.fillStyle=night?'#4A5260':'#C9C4B4'; ctx.globalAlpha=.5;
+  const mo=(-cam.m*PPM*0.9)%90;
+  for(let x=mo;x<CW;x+=90) ctx.fillRect(x,(yBase+yCurb)/2+4,34,2);
+  ctx.globalAlpha=1;
+  // 铺装花纹（近侧，走得最快）
+  const off=(-cam.m*PPM*1.5);
+  ctx.save(); ctx.beginPath(); ctx.rect(0,yCurb+3,CW,CH-yCurb); ctx.clip();
+  if(city.style==='tile'){ // calçada portuguesa 波浪
+    ctx.strokeStyle=night?'#414B58':'#8E8A80'; ctx.lineWidth=3;
+    for(let k=0;k<3;k++){
+      ctx.beginPath();
+      for(let x=-40;x<CW+40;x+=8){
+        const y=yCurb+16+k*20+Math.sin((x-off)/26)*7;
+        x===-40?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }else{
+    ctx.strokeStyle=night?'#39424E':'#A8A49A'; ctx.lineWidth=1;
+    const cell=city.style==='stone'?16:34;
+    for(let x=off%cell;x<CW;x+=cell){ctx.beginPath();ctx.moveTo(x,yCurb+3);ctx.lineTo(x,CH);ctx.stroke()}
+    for(let y=yCurb+18;y<CH;y+=cell){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke()}
+  }
+  ctx.restore();
+  if(wet){ // 积水反光
+    ctx.globalAlpha=.14; ctx.fillStyle=night?'#8FA8C4':'#DDE6EC';
+    for(let i=0;i<5;i++){
+      const px=((i*173-cam.m*PPM*1.2)%(CW+200)+CW+200)%(CW+200)-100;
+      ctx.beginPath(); ctx.ellipse(px,yCurb+26+(i%3)*14,40+i*9,5,0,0,7); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawProps(city,hh){
+  const night=isNight(hh);
+  const dark=night?'#0D131C':'#2B3340';
+  const span=CW/PPM;
+  const from=Math.floor(cam.m*0.75/24)-1, to=Math.ceil((cam.m*0.75+span)/24)+1;
+  // 路灯（对面）
+  for(let i=from;i<=to;i++){
+    const wx=i*24+((noiseAt(city.id+'lamp',i)-0.5)*6);
+    const x=(wx-cam.m*0.75)*PPM; if(x<-60||x>CW+60) continue;
+    const top=yBase-CH*0.30;
+    ctx.strokeStyle=dark; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(x,yBase); ctx.lineTo(x,top); ctx.stroke();
+    if(city.lamp==='iron'){ctx.beginPath();ctx.arc(x,top+8,8,Math.PI,0);ctx.stroke()}
+    ctx.fillStyle=night?'#F2C879':(city.lamp==='lantern'?'#E8DCC0':'#4A5460');
+    if(city.lamp==='lantern'){ctx.fillRect(x-5,top,10,15)}
+    else{ctx.beginPath();ctx.arc(x,top,5,0,7);ctx.fill()}
+    if(night){
+      const gl=ctx.createRadialGradient(x,top+4,2,x,top+4,70);
+      gl.addColorStop(0,'rgba(255,205,120,.35)'); gl.addColorStop(1,'rgba(255,205,120,0)');
+      ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(x,top+4,70,0,7); ctx.fill();
+    }
+  }
+  // 电车 / 电线
+  if(city.wires){
+    ctx.strokeStyle=night?'#141A24':'#3A4250'; ctx.lineWidth=1;
+    for(let k=0;k<2;k++){
+      ctx.beginPath();
+      for(let x=0;x<=CW;x+=10){
+        const y=yBase-CH*0.34+k*7+Math.sin((x+cam.m*PPM*0.75)/120)*3;
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+  // 树（近侧）
+  if(city.tree!=='none'){
+    const f2=Math.floor(cam.m/31)-1, t2=Math.ceil((cam.m+span)/31)+1;
+    for(let i=f2;i<=t2;i++){
+      const wx=i*31+noiseAt(city.id+'tree',i)*8;
+      const x=(wx-cam.m)*PPM; if(x<-90||x>CW+90) continue;
+      const h=CH*0.26+noiseAt(city.id+'th',i)*CH*0.07;
+      const top=yCurb+6-h;
+      ctx.strokeStyle=night?'#171C24':'#5A4A3A'; ctx.lineCap='round';
+      ctx.lineWidth=9; ctx.beginPath(); ctx.moveTo(x,yCurb+8); ctx.lineTo(x-4,top+18); ctx.stroke();
+      ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(x-3,top+34); ctx.lineTo(x-26,top+14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x-2,top+42); ctx.lineTo(x+22,top+20); ctx.stroke();
+      ctx.lineCap='butt';
+      const leaf=city.tree==='sakura'?(night?'#4A3448':'#E8C2CE'):(night?'#1D2A24':'#6E8B5A');
+      const r=rng(hash(city.id+'leaf'+i));
+      for(let k=0;k<11;k++){
+        const lx=x-4+(r()-.5)*96, ly=top+6-(r()*30)+(r()-.5)*34;
+        ctx.fillStyle=k%3===0?shade(leaf,night?-0.12:0.10):leaf;
+        ctx.beginPath(); ctx.ellipse(lx,ly,24+r()*20,16+r()*13,(r()-.5)*0.6,0,7); ctx.fill();
+      }
+    }
+  }
+  // 街边小物 + 行人剪影（对面）
+  const f3=Math.floor(cam.m*0.75/58)-1, t3=Math.ceil((cam.m*0.75+span)/58)+1;
+  for(let i=f3;i<=t3;i++){
+    const wx=i*58+noiseAt(city.id+'p',i)*30;
+    const x=(wx-cam.m*0.75)*PPM; if(x<-40||x>CW+40) continue;
+    const k=noiseAt(city.id+'k',i);
+    ctx.fillStyle=dark;
+    if(k<0.34){ // 人
+      const hgt=CH*0.11;
+      ctx.beginPath(); ctx.arc(x,yBase-hgt,hgt*0.17,0,7); ctx.fill();
+      ctx.fillRect(x-hgt*0.15,yBase-hgt*0.85,hgt*0.3,hgt*0.55);
+      ctx.fillRect(x-hgt*0.15,yBase-hgt*0.32,hgt*0.11,hgt*0.32);
+      ctx.fillRect(x+hgt*0.04,yBase-hgt*0.32,hgt*0.11,hgt*0.32);
+    }else if(k<0.55){ // 长椅
+      ctx.fillRect(x-16,yBase-14,32,3); ctx.fillRect(x-16,yBase-22,32,3);
+      ctx.fillRect(x-14,yBase-14,3,14); ctx.fillRect(x+11,yBase-14,3,14);
+    }else if(k<0.72){ // 推车 / 桌椅
+      ctx.fillRect(x-14,yBase-20,28,4); ctx.fillRect(x-2,yBase-20,3,20);
+      ctx.beginPath(); ctx.arc(x-9,yBase-2,4,0,7); ctx.arc(x+9,yBase-2,4,0,7); ctx.fill();
+    }else if(k<0.84){ // 自行车
+      ctx.strokeStyle=dark; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.arc(x-9,yBase-6,6,0,7); ctx.arc(x+9,yBase-6,6,0,7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x-9,yBase-6); ctx.lineTo(x,yBase-16); ctx.lineTo(x+9,yBase-6); ctx.stroke();
+    }
+  }
+}
+
+function drawRain(city){
+  const r=rng(hash(city.id+'rain'));
+  ctx.strokeStyle='rgba(190,205,220,.34)'; ctx.lineWidth=1;
+  const t=performance.now()/1000;
+  for(let i=0;i<130;i++){
+    const sp=260+r()*220, x=(r()*CW*1.4-t*40)%(CW+60), y=((r()*CH)+t*sp)%(CH+40);
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-3,y+11); ctx.stroke();
+  }
+}
+
+function drawScene(){
+  const city=CUR, hh=clock.hh, weather=WX;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,CW,CH);
+  const bob=cam.moving?Math.sin(cam.phase)*1.7:0;
+  ctx.translate(0,bob);
+  drawSky(city,hh,weather);
+  drawSkyline(city,hh);
+  // 立面
+  const span=CW/PPM+16, base=cam.m*0.75;
+  const list=ensureBuildings(city,base+span);
+  const night=isNight(hh);
+  for(const b of list){
+    const x=(b.x-base)*PPM; if(x>CW+40) break; if(x+b.w*PPM<-40) continue;
+    const t=buildingTile(city,b,night);
+    ctx.drawImage(t,Math.round(x),Math.round(yBase-t.height));
+  }
+  if(weather==='haze'){ctx.fillStyle=night?'rgba(20,28,40,.28)':'rgba(226,224,212,.30)';ctx.fillRect(0,0,CW,yBase)}
+  drawGround(city,hh,weather);
+  drawProps(city,hh);
+  if(weather==='drizzle') drawRain(city);
+  // 快进速度线
+  if(cam.rush>0.01){
+    ctx.globalAlpha=Math.min(.4,cam.rush*.5); ctx.strokeStyle='#FFFFFF'; ctx.lineWidth=1.2;
+    const r=rng(1234);
+    for(let i=0;i<16;i++){const y=r()*CH, len=60+r()*160, x=r()*CW;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+len,y); ctx.stroke()}
+    ctx.globalAlpha=1;
+  }
+  // 暗角
+  const vg=ctx.createRadialGradient(CW/2,CH/2,CH*0.35,CW/2,CH/2,CH*1.05);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,night?'rgba(0,0,0,.5)':'rgba(20,26,38,.22)');
+  ctx.fillStyle=vg; ctx.fillRect(0,-4,CW,CH+8);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+/* ============================================================
+   状态与存档
+   ============================================================ */
+const KEY='citywalk-state-v1';
+let S={v:1,cur:'lisboa',cities:{},cards:[],stamps:[],last:null,streak:0};
+let DB=null, SAMPLER=null, saveTimer=null;
+
+function cityState(id){ if(!S.cities[id]) S.cities[id]={m:0,wp:0}; return S.cities[id] }
+function dayKey(){ return new Date().toISOString().slice(0,10) }
+function addToday(m){
+  if(!S.today||S.today.d!==dayKey()) S.today={d:dayKey(),m:0};
+  S.today.m+=m;
+}
+function totalM(){ return Object.values(S.cities).reduce((a,c)=>a+(c.m||0),0) }
+function localSave(){ try{ localStorage.setItem(KEY,JSON.stringify(S)) }catch(e){} }
+function save(){
+  localSave();
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{ if(DB) DB.doc('journal/state').set(JSON.parse(JSON.stringify(S))).catch(()=>{}) },900);
+}
+function loadLocal(){
+  try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw); if(o&&o.v===1) S=Object.assign(S,o) } }catch(e){}
+}
+async function loadRemote(){
+  if(!window.claude||!window.claude.use) return;
+  try{ DB=await window.claude.use('db') }catch(e){ DB=null }
+  if(!DB) return;
+  try{
+    const snap=await DB.doc('journal/state').get();
+    if(snap.exists){
+      const o=snap.data();
+      if(o&&o.v===1&&(totalM()===0||Object.values(o.cities||{}).reduce((a,c)=>a+(c.m||0),0)>=totalM())){
+        S=Object.assign({cities:{},cards:[],stamps:[]},o);
+        selectCity(S.cur||'lisboa',true); renderJournal();
+      }
+    }
+  }catch(e){}
+}
+async function initSampler(){
+  if(!window.claude||!window.claude.use) return;
+  try{ SAMPLER=await window.claude.use('sample') }catch(e){ SAMPLER=null }
+  $('#askClaude').style.display=SAMPLER?'':'none';
+}
+$('#askClaude').style.display='none';
+
+/* ============================================================
+   模拟
+   ============================================================ */
+let CUR=CITIES[0], WX='clear', clock=cityLocal(CUR);
+const cam={m:0,target:0,moving:false,phase:0,rush:0,prev:0};
+let live=false, queue=[], curMoment=null;
+
+function selectCity(id,silent){
+  const c=CITIES.find(x=>x.id===id)||CITIES[0];
+  CUR=c; S.cur=id; WX=weatherOf(c); clock=cityLocal(c);
+  const st=cityState(id);
+  cam.m=st.m; cam.target=st.m; cam.prev=st.m; cam.rush=0;
+  tileCache.clear();
+  document.querySelectorAll('.city-tab').forEach(t=>t.setAttribute('aria-selected',String(t.dataset.id===id)));
+  hideMoment(); queue=[];
+  updateRoute(); updateHud();
+  if(!silent) save();
+  if(audio.on) audio.retune();
+}
+
+function addMeters(m,label){
+  const st=cityState(CUR.id), total=CUR.wps[CUR.wps.length-1].m;
+  if(st.m>=total){ toast('这条路线已经走完了 — 换座城市'); return }
+  const before=cam.target;
+  cam.target=Math.min(total,cam.target+m);
+  st.m=cam.target; addToday(cam.target-before);
+  bumpStreak();
+  toast(label+' · +'+fmt(m)+' m');
+  save();
+}
+function bumpStreak(){
+  const today=new Date().toISOString().slice(0,10);
+  if(S.last===today) return;
+  const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  S.streak=(S.last===y)?(S.streak||0)+1:1;
+  S.last=today;
+}
+
+let lastT=performance.now(), lastRouteUI=0;
+function frame(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  if(live){
+    const total=CUR.wps[CUR.wps.length-1].m;
+    if(cam.target<total){ const b=cam.target;
+      cam.target=Math.min(total,cam.target+WALK_MPS*dt);
+      cityState(CUR.id).m=cam.target; addToday(cam.target-b);
+      if(Math.floor(cam.target)%37===0) save(); }
+    else if(!queue.length&&!curMoment){ setLive(false); toast('走到终点了') }
+  }
+  const diff=cam.target-cam.m;
+  if(diff>0.02){
+    const v=Math.max(WALK_MPS,diff*2.0);
+    const step=Math.min(diff,v*dt);
+    cam.m+=step; cam.moving=true; cam.phase+=step*1.9;
+    cam.rush=clamp((v-WALK_MPS)/26,0,1);
+    checkEvents(cam.prev,cam.m); cam.prev=cam.m;
+    if(now-lastRouteUI>170){ updateRoute(); lastRouteUI=now }
+  }else{
+    if(cam.moving){ cam.moving=false; updateRoute() }
+    cam.moving=live; cam.rush*=0.88;
+    if(live) cam.phase+=WALK_MPS*dt*1.9;
+  }
+  drawScene();
+  requestAnimationFrame(frame);
+}
+
+function checkEvents(prev,m){
+  let fired=0;
+  CUR.wps.forEach((w,i)=>{ if(i>0&&prev<w.m&&m>=w.m){ arrive(i); fired++ } });
+  const pb=Math.floor(prev/BLOCK_M), nb=Math.floor(m/BLOCK_M);
+  if(nb>pb&&fired===0&&queue.length<2){
+    const r=rng(hash(CUR.id+'enc'+nb));
+    if(r()<0.5) queue.push(makeMoment(nb));
+  }
+  if(!curMoment&&queue.length) showMoment(queue.shift());
+}
+
+function arrive(i){
+  const w=CUR.wps[i], st=cityState(CUR.id);
+  st.wp=Math.max(st.wp||0,i);
+  const key=CUR.id+':'+i;
+  if(!S.stamps.some(s=>s.k===key)){
+    S.stamps.push({k:key,city:CUR.id,i,ts:Date.now()});
+    toast('抵达 '+w.zh);
+  }
+  queue.push({kind:'wp',title:'抵达站点',pos:w.la,
+    text:'你走到了'+w.zh+'（'+w.la+'）。'+(i===CUR.wps.length-1
+      ? '这条路线到此为止 —— 全程 '+fmt(w.m)+' m，是你在室内一步一步换来的。'
+      : '距离下一站还有 '+fmt(CUR.wps[i+1].m-w.m)+' m。'),
+    wp:w.zh, block:Math.floor(w.m/BLOCK_M)});
+  save(); renderJournal();
+}
+
+function makeMoment(block){
+  const f=CUR.frag, r=rng(hash(CUR.id+'m'+block));
+  const parts=[pick(r,f.sight)];
+  parts.push(r()<0.5?pick(r,f.sound):pick(r,f.smell));
+  const isFind=r()<0.22;
+  if(isFind) parts.push(pick(r,f.find));
+  else if(r()<0.55) parts.push(pick(r,f.human));
+  return {kind:isFind?'find':'street',title:isFind?'拾得':'街角',
+    pos:'第 '+block+' 街区',text:parts.join('。')+'。',
+    wp:nearestWp().zh, block};
+}
+function nearestWp(){
+  let cur=CUR.wps[0];
+  for(const w of CUR.wps){ if(cam.m>=w.m) cur=w }
+  return cur;
+}
+
+/* ---------- 卡片 UI ---------- */
+const momentEl=$('#moment');
+function showMoment(m){
+  curMoment=m;
+  $('#mkKind').textContent=m.title;
+  $('#mkPos').textContent=m.pos;
+  $('#mkText').textContent=m.text;
+  momentEl.classList.toggle('wp',m.kind==='wp');
+  momentEl.classList.add('show');
+  $('#keepCard').textContent='收进手账';
+  $('#keepCard').disabled=false;
+}
+function hideMoment(){ momentEl.classList.remove('show'); curMoment=null;
+  setTimeout(()=>{ if(!curMoment&&queue.length) showMoment(queue.shift()) },380) }
+$('#closeMoment').onclick=hideMoment;
+$('#keepCard').onclick=()=>{
+  if(!curMoment) return;
+  S.cards.unshift({city:CUR.id,wp:curMoment.wp,block:curMoment.block,text:curMoment.text,ts:Date.now(),kind:curMoment.kind});
+  if(S.cards.length>120) S.cards.length=120;
+  save(); renderJournal();
+  $('#keepCard').textContent='已收好'; $('#keepCard').disabled=true;
+  toast('收进手账');
+};
+$('#askClaude').onclick=async()=>{
+  if(!SAMPLER) return;
+  const btn=$('#askClaude'); btn.disabled=true; const old=btn.textContent; btn.textContent='Claude 正在写…';
+  const w=nearestWp();
+  const prompt='你是一个正在'+CUR.zh+'（'+CUR.la+'）街头独自散步的人，此刻在'+w.zh+'（'+w.la+
+    '）附近，当地时间 '+clock.label+'，天气'+WEATHER_ZH[WX]+'，已经走了 '+fmt(cam.m)+' 米。'+
+    '写一段 70 到 110 个汉字的明信片正文，用第二人称"你"，只写此刻能看见、听见、闻到的具体东西，'+
+    '要有一个只有这条街才有的细节。不要比喻堆砌，不要"仿佛""宛如"，不要感叹号，不要开头问候，直接从画面写起。只输出正文。';
+  try{
+    const res=await SAMPLER(prompt,{modelTier:'default'});
+    const text=(res&&res.text||'').trim();
+    if(text){
+      S.cards.unshift({city:CUR.id,wp:w.zh,block:Math.floor(cam.m/BLOCK_M),text,ts:Date.now(),kind:'ai'});
+      save(); renderJournal();
+      $('#mkKind').textContent='明信片'; $('#mkPos').textContent=w.la;
+      $('#mkText').textContent=text; curMoment=null; momentEl.classList.add('show');
+      $('#keepCard').textContent='已收好'; $('#keepCard').disabled=true;
+      toast('明信片已收进手账');
+    }
+  }catch(e){ toast(e&&e.code==='not_granted'?'这次没有授权':'没写成，过会儿再试') }
+  btn.disabled=false; btn.textContent=old;
+};
+
+/* ============================================================
+   面板
+   ============================================================ */
+function buildTabs(){
+  const n=$('#cities'); n.innerHTML='';
+  CITIES.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='city-tab'; b.dataset.id=c.id; b.setAttribute('role','tab');
+    b.setAttribute('aria-selected','false');
+    b.innerHTML='<span class="zh"></span><span class="la"></span>';
+    b.querySelector('.zh').textContent=c.zh;
+    b.querySelector('.la').textContent=c.la;
+    b.onclick=()=>{ setLive(false); selectCity(c.id) };
+    n.appendChild(b);
+  });
+}
+function buildActs(){
+  const g=$('#actsGrid'); g.innerHTML='';
+  ACTIVITIES.forEach(a=>{
+    const b=document.createElement('button'); b.className='act'; b.type='button';
+    const m=Math.round(a.steps*STEP_M);
+    b.innerHTML='<span class="n"></span><span class="v"></span>';
+    b.querySelector('.n').innerHTML='';
+    b.querySelector('.n').append(a.n);
+    const s=document.createElement('small'); s.textContent=a.d+' · '+a.steps+' 步';
+    b.querySelector('.n').appendChild(s);
+    b.querySelector('.v').textContent='+'+m+' m';
+    b.onclick=()=>addMeters(m,a.n);
+    g.appendChild(b);
+  });
+}
+function updateHud(){
+  clock=cityLocal(CUR);
+  $('#hudCity').textContent=CUR.zh+' / '+CUR.la;
+  $('#hudWhere').textContent=nearestWp().la;
+  $('#hudClock').textContent='当地 '+clock.label;
+  $('#hudWeather').textContent=WEATHER_ZH[WX]+(isNight(clock.hh)?' · 夜':'');
+  $('#paceTxt').textContent=live?'实时同行 1.35 m/s':(cam.target-cam.m>1?'快进中':'停在原地');
+  $('#pace').parentElement.classList.toggle('walking',live||cam.target-cam.m>1);
+}
+function updateRoute(){
+  const st=cityState(CUR.id), total=CUR.wps[CUR.wps.length-1].m, m=cam.m;
+  $('#routeName').textContent=CUR.route;
+  $('#routeTotal').textContent='全程 '+fmt(total)+' m';
+  $('#routeSub').textContent=CUR.sub;
+  $('#distNum').textContent=fmt(m);
+  const nextI=CUR.wps.findIndex(w=>w.m>m);
+  $('#ofLine').textContent=nextI>0
+    ? '距 '+CUR.wps[nextI].zh+' 还有 '+fmt(CUR.wps[nextI].m-m)+' m · 第 '+Math.floor(m/BLOCK_M)+' 街区'
+    : '全程走完 · 第 '+Math.floor(m/BLOCK_M)+' 街区';
+  $('#fill').style.width=clamp(m/total*100,0,100)+'%';
+  const td=(S.today&&S.today.d===dayKey())?S.today.m:0;
+  $('#mToday').innerHTML=fmt(td)+'<i>m</i>';
+  $('#mCity').innerHTML=fmt(st.m)+'<i>m</i>';
+  $('#mAll').innerHTML=(totalM()/1000).toFixed(1)+'<i>km</i>';
+  const tr=$('#track'); tr.querySelectorAll('.tick').forEach(t=>t.remove());
+  CUR.wps.forEach((w,i)=>{ if(i===0) return;
+    const t=document.createElement('i'); t.className='tick'+(m>=w.m?' done':'');
+    t.style.left=(w.m/total*100)+'%'; tr.appendChild(t) });
+  const ul=$('#wps'); ul.innerHTML='';
+  CUR.wps.forEach((w,i)=>{
+    const li=document.createElement('li');
+    const done=m>=w.m, next=!done&&i===nextI;
+    li.className=done?'done':(next?'next':'far');
+    const a=document.createElement('span'); a.className='m'; a.textContent=fmt(w.m)+'m';
+    const b=document.createElement('span'); b.className='nm'; b.append(w.zh);
+    const sm=document.createElement('small'); sm.textContent=w.la; b.appendChild(sm);
+    const c=document.createElement('span'); c.className='st';
+    c.textContent=done?'已抵达':(next?'下一站':'剩 '+fmt(w.m-m)+'m');
+    li.append(a,b,c); ul.appendChild(li);
+  });
+  updateHud();
+}
+function equivText(){
+  const t=totalM();
+  if(t<80) return '还没开始。随便点一个活动，第一个街区就来了。';
+  const km=t/1000, laps=t/CUR.wps[CUR.wps.length-1].m;
+  let s='累计 '+km.toFixed(2)+' km，等于把'+CUR.zh+'这条路走了 '+laps.toFixed(1)+' 遍。';
+  const refs=[[42195,'已经够一场全程马拉松了'],[21097,'够一场半马'],[10000,'够一个十公里'],[5000,'够绕标准操场 12 圈'],[1600,'够走完一整条 Laugavegur'],[400,'够绕操场一圈']];
+  for(const [d,txt] of refs) if(t>=d){ s+=txt+'。'; break }
+  return s;
+}
+function renderJournal(){
+  $('#stTotal').innerHTML=(totalM()/1000).toFixed(1)+'<small>km</small>';
+  $('#stStamps').textContent=S.stamps.length;
+  $('#stStreak').textContent=S.streak||0;
+  $('#equiv').textContent=equivText();
+  const sb=$('#stampBox');
+  if(!S.stamps.length){ sb.innerHTML='<span class="empty">走到第一个站点就有戳了。</span>' }
+  else{
+    sb.innerHTML='';
+    S.stamps.slice().sort((a,b)=>a.ts-b.ts).forEach(s=>{
+      const c=CITIES.find(x=>x.id===s.city); if(!c||!c.wps[s.i]) return;
+      const e=document.createElement('span'); e.className='stamp';
+      e.textContent=c.zh+' · '+c.wps[s.i].zh;
+      sb.appendChild(e);
+    });
+  }
+  const cb=$('#cardBox');
+  if(!S.cards.length){ cb.innerHTML='<span class="empty">在街角把喜欢的瞬间收进来。</span>' }
+  else{
+    cb.innerHTML='';
+    S.cards.slice(0,40).forEach(card=>{
+      const c=CITIES.find(x=>x.id===card.city);
+      const d=document.createElement('div'); d.className='card'+(card.kind==='ai'?' ai':'');
+      const meta=document.createElement('div'); meta.className='meta';
+      const l=document.createElement('span'); l.textContent=(c?c.zh:'')+' · '+(card.wp||'')+(card.kind==='ai'?' · Claude':'');
+      const r=document.createElement('span');
+      r.textContent=new Date(card.ts).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'});
+      meta.append(l,r);
+      const p=document.createElement('p'); p.textContent=card.text;
+      d.append(meta,p); cb.appendChild(d);
+    });
+  }
+}
+
+/* ---------- 交互 ---------- */
+function setLive(v){
+  live=v; $('#liveBtn').setAttribute('aria-pressed',String(v));
+  $('#liveBtn').textContent=v?'停下歇会儿':'实时同行';
+  if(v) bumpStreak();
+  updateHud(); save();
+}
+$('#liveBtn').onclick=()=>setLive(!live);
+$('#addCustom').onclick=()=>{
+  const el=$('#customSteps'), n=parseInt(el.value,10);
+  if(!n||n<1){ toast('填个步数'); return }
+  addMeters(Math.round(Math.min(n,60000)*STEP_M),'手动 '+fmt(Math.min(n,60000))+' 步');
+  el.value='';
+};
+$('#customSteps').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#addCustom').click() });
+$('#openJournal').onclick=()=>{ renderJournal(); $('#jwrap').classList.add('open') };
+const closeJ=()=>$('#jwrap').classList.remove('open');
+$('#closeJournal').onclick=closeJ; $('#scrim').onclick=closeJ;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeJ(); hideMoment() } });
+$('#resetBtn').onclick=()=>{
+  if(!confirm('清空所有城市的进度、站点戳和明信片？')) return;
+  S={v:1,cur:CUR.id,cities:{},cards:[],stamps:[],last:null,streak:0};
+  save(); selectCity(CUR.id); renderJournal(); toast('已清空');
+};
+function toast(msg){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0';
+    setTimeout(()=>t.remove(),420) },2200);
+}
+
+/* ---------- 合成环境音 ---------- */
+const audio={on:false,ctx:null,gain:null,lp:null,rain:null,timer:null,
+  start(){
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return false;
+    const c=new AC(); this.ctx=c;
+    const len=c.sampleRate*2, buf=c.createBuffer(1,len,c.sampleRate), d=buf.getChannelData(0);
+    let last=0;
+    for(let i=0;i<len;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2 }
+    const src=c.createBufferSource(); src.buffer=buf; src.loop=true;
+    this.lp=c.createBiquadFilter(); this.lp.type='lowpass'; this.lp.frequency.value=480;
+    this.gain=c.createGain(); this.gain.gain.value=0.0;
+    src.connect(this.lp).connect(this.gain).connect(c.destination); src.start();
+    this.gain.gain.linearRampToValueAtTime(0.07,c.currentTime+1.6);
+    // 雨层
+    const rs=c.createBufferSource(); rs.buffer=buf; rs.loop=true;
+    const hp=c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2200;
+    this.rain=c.createGain(); this.rain.gain.value=0;
+    rs.connect(hp).connect(this.rain).connect(c.destination); rs.start();
+    this.retune(); this.schedulePing();
+    return true;
+  },
+  retune(){
+    if(!this.ctx) return;
+    const f={lisboa:520,kyoto:380,istanbul:620,newyork:700,reykjavik:440,buenosaires:560}[CUR.id]||500;
+    this.lp.frequency.setTargetAtTime(f,this.ctx.currentTime,1.2);
+    this.rain.gain.setTargetAtTime(WX==='drizzle'?0.016:0,this.ctx.currentTime,1.5);
+  },
+  schedulePing(){
+    clearTimeout(this.timer);
+    this.timer=setTimeout(()=>{
+      if(!this.on){ return }
+      const c=this.ctx, o=c.createOscillator(), g=c.createGain();
+      const base={lisboa:[740,1],kyoto:[392,0],istanbul:[523,1],newyork:[310,2],reykjavik:[880,0],buenosaires:[466,1]}[CUR.id]||[600,1];
+      o.type=base[1]===2?'sawtooth':'sine'; o.frequency.value=base[0]*(Math.random()<0.4?1.5:1);
+      g.gain.value=0; o.connect(g).connect(c.destination); o.start();
+      g.gain.linearRampToValueAtTime(0.05,c.currentTime+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+(base[1]===0?2.4:1.1));
+      o.stop(c.currentTime+2.6);
+      this.schedulePing();
+    },14000+Math.random()*32000);
+  },
+  toggle(){
+    if(!this.on){ if(!this.ctx){ if(!this.start()) return toast('这个浏览器放不了') }
+      else{ this.ctx.resume(); this.gain.gain.setTargetAtTime(0.07,this.ctx.currentTime,0.8); this.retune(); }
+      this.on=true; this.schedulePing();
+    }else{
+      this.on=false; if(this.gain) this.gain.gain.setTargetAtTime(0,this.ctx.currentTime,0.5);
+      if(this.rain) this.rain.gain.setTargetAtTime(0,this.ctx.currentTime,0.5);
+      clearTimeout(this.timer);
+    }
+    $('#sound').setAttribute('aria-pressed',String(this.on));
+  }};
+$('#sound').onclick=()=>audio.toggle();
+
+/* ---------- 启动 ---------- */
+buildTabs(); buildActs(); loadLocal();
+resize();
+new ResizeObserver(()=>{ resize() }).observe(cvs);
+selectCity(S.cur||'lisboa',true);
+renderJournal();
+setInterval(()=>{ updateHud(); if(Math.random()<0.3) tileCache.clear() },60000);
+requestAnimationFrame(frame);
+loadRemote(); initSampler();
+if(window.claude&&window.claude.hot&&window.claude.hot.snapshot){
+  window.claude.hot.snapshot(()=>({cur:CUR.id,live}));
+}
+</script>
