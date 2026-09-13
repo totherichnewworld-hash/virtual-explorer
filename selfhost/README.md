@@ -17,22 +17,38 @@ artifact 版（程序生成的街景，开箱即用）在仓库根目录的 `ind
 - 预设八个起点，也可以直接粘贴 `纬度,经度` 或一条 Google Maps 链接跳过去
 - 距离记在 `localStorage`：本次 / 今天 / 累计
 
-## 五分钟跑起来
+## 只想先看看效果（不用 Cloudflare，两分钟）
 
 ```bash
-# 1. 拿 key
-#    Google Cloud Console → 新建项目 → 启用 "Map Tiles API" → 创建 API key
-
-# 2. 本地填 key
-cd selfhost
-cp config.example.js config.js        # config.js 已在 .gitignore 里
-$EDITOR config.js                     # 填上你的 key
-
-# 3. 起一个本地服务（localhost 是安全上下文，传感器能用）
-npx serve .                           # 或 python3 -m http.server 3000
+GOOGLE_MAPS_API_KEY=你的key npm start
 ```
 
-打开 `http://localhost:3000`。没填 key 的话，页面会停在配置说明上，不会偷偷发请求。
+打开 `http://localhost:8080`。没了。
+
+`tools/serve.mjs` 是个零依赖的本地服务器（不用 `npm install`），它同时做两件事：
+发静态页面、把 `/v1/3dtiles/*` 代理到 Google 并在服务端拼上 key ——
+**和 Cloudflare 上那个 Worker 是同一套逻辑**，所以本地看到的就是部署后的样子，
+key 一样不进浏览器。
+
+不带 key 启动也行，页面会停在配置说明页，不会偷偷发请求。
+
+想在手机上试体感（传感器必须 HTTPS，localhost 在电脑上才算安全上下文）：
+
+```bash
+npx localtunnel --port 8080        # 会给你一个临时 https 地址
+```
+
+### 另一种本地方式：config.js
+
+```bash
+cd selfhost
+cp config.example.js config.js     # 已在 .gitignore 里
+$EDITOR config.js                  # 填 key
+npx serve .
+```
+
+这种方式 key 会进浏览器（页面左上角会显示「key 在浏览器里」），
+只适合自己本机看看。
 
 ## 部署到 Cloudflare Pages
 

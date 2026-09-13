@@ -1,0 +1,13 @@
+{
+  "name": "virtual-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "把室内活动换算成真实城市路线上的步行距离",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build": "node tools/build-pages.mjs",
+    "build:cloudflare": "TARGET=cloudflare node tools/build-pages.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

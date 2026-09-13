@@ -23,6 +23,15 @@
   可校准、可左右反向。读不到传感器时明确说明并退回手动。
 - **手账**：站点戳、明信片、累计公里数、连续天数。进度存在 artifact 的 `db` 里。
 
+## 先跑起来
+
+```bash
+npm start                              # 程序生成版无需任何 key，直接开 index.html 也行
+GOOGLE_MAPS_API_KEY=你的key npm start   # 真实地球版 → http://localhost:8080
+```
+
+零依赖，不用 `npm install`。
+
 ## 两个版本
 
 | | 在哪 | 特点 |
