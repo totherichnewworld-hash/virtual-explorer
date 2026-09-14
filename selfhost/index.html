@@ -53,6 +53,17 @@ button,select,input{font:inherit;color:inherit}
 .btn.go{background:var(--fluoro);border-color:var(--fluoro);color:#1A0D07;font-size:13px;padding:11px 20px}
 select,input[type=text]{background:#0C1420;border:1px solid var(--rule);border-radius:3px;
   padding:7px 9px;font-family:var(--f-mono);font-size:11.5px;min-width:0}
+.results{list-style:none;margin:9px 0 0;padding:0;max-height:210px;overflow-y:auto;
+  border:1px solid var(--rule);border-radius:3px}
+.results li{border-bottom:1px solid var(--rule)}
+.results li:last-child{border-bottom:0}
+.results button{display:block;width:100%;text-align:left;background:none;border:0;
+  padding:8px 10px;cursor:pointer;font-family:var(--f-body);font-size:12.5px;line-height:1.5}
+.results button:hover,.results button:focus-visible{background:#1B2836}
+.results .nm{display:block;font-weight:600}
+.results .ad{display:block;font-family:var(--f-mono);font-size:10px;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.searching{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);margin-top:8px}
 input[type=range]{accent-color:var(--fluoro);width:92px}
 .read{font-family:var(--f-mono);font-size:11px;color:var(--ink-2);line-height:1.75;margin:9px 0 0}
 .read b{color:var(--ink);font-weight:500}
@@ -116,9 +127,10 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
     <button class="btn" id="goPreset">去这里</button>
   </div>
   <div class="row">
-    <input type="text" id="coords" placeholder="纬度,经度 或粘贴地图链接" aria-label="坐标">
-    <button class="btn" id="goCoords">跳过去</button>
+    <input type="text" id="coords" placeholder="搜地名，或粘坐标 / 地图链接" aria-label="去哪儿">
+    <button class="btn" id="goCoords">找</button>
   </div>
+  <ul class="results" id="results" hidden></ul>
   <p class="read" id="where">—</p>
   <p class="hint"><span id="mode" style="color:var(--ink-3)" title="静态托管无法隐藏 key；配额上限才是真正的防线">连接中…</span> · 影像 Google Photorealistic 3D Tiles<br>
     <b>点地面就走过去</b> · 拖动看四周 · 滚轮变焦 · W 前进 · A/D 转向 · R 回正<br>

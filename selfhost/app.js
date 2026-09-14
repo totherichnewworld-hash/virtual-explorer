@@ -345,7 +345,8 @@ function buildPresets(){
   });
 }
 
-function jumpTo(lat, lon, groundGuess){
+function jumpTo(lat, lon, groundGuess, name){
+  S.place = name || null;
   S.lat = lat; S.lon = lon;
   S.ground = groundGuess != null ? groundGuess : S.ground;
   S.groundKnown = false; S.session = 0;
@@ -367,6 +368,51 @@ async function sampleGround(force){
       S.groundKnown = true;
     }
   }catch(e){}
+}
+
+/* ---------- 地名搜索 ----------
+   用 OpenStreetMap 的 Nominatim：免费、不需要 key、不动 Google 的配额。
+   它是志愿者在维护的服务，所以只在你按回车/点按钮时查一次，
+   并且两次之间至少隔 1.2 秒 —— 别把人家刷爆了。                      */
+let lastQuery = 0;
+
+async function searchPlace(q){
+  const box = $('#results');
+  const wait = 1200 - (Date.now() - lastQuery);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastQuery = Date.now();
+  box.hidden = false;
+  box.innerHTML = '<li><span class="searching" style="display:block;padding:8px 10px">找着呢…</span></li>';
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6' +
+    '&accept-language=' + encodeURIComponent(navigator.language || 'zh') +
+    '&q=' + encodeURIComponent(q);
+  let list = [];
+  try{
+    const r = await fetch(url, { headers: { accept: 'application/json' } });
+    if (r.ok) list = await r.json();
+  }catch(e){}
+  if (!list.length){
+    box.innerHTML = '<li><span class="searching" style="display:block;padding:8px 10px">' +
+      '没找到。换个说法，或者直接粘坐标（38.7075,-9.1364）</span></li>';
+    return;
+  }
+  box.innerHTML = '';
+  list.forEach(item => {
+    const parts = (item.display_name || '').split(',');
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const nm = document.createElement('span'); nm.className = 'nm';
+    nm.textContent = item.name || parts[0] || '(无名)';
+    const ad = document.createElement('span'); ad.className = 'ad';
+    ad.textContent = parts.slice(1).join(',').trim() || (item.type || '');
+    btn.append(nm, ad);
+    btn.onclick = ()=>{
+      box.hidden = true; $('#coords').value = '';
+      jumpTo(parseFloat(item.lat), parseFloat(item.lon), null, item.name || parts[0]);
+    };
+    li.appendChild(btn); box.appendChild(li);
+  });
 }
 
 /* ---------- 点地面走过去（像 Street View，但不限于拍摄点） ---------- */
@@ -454,13 +500,19 @@ function bindLook(){
 function bindButtons(){
   $('#goPreset').onclick = ()=>{
     const p = PRESETS[+$('#preset').value || 0];
-    jumpTo(p.lat, p.lon, p.h);
+    $('#results').hidden = true;
+    jumpTo(p.lat, p.lon, p.h, p.n.split(' · ')[0]);
   };
   $('#goCoords').onclick = ()=>{
     const raw = $('#coords').value.trim();
+    if (!raw) return;
     const m = raw.match(/(-?\d+\.\d+)[,\s/@]+(-?\d+\.\d+)/);
-    if (!m){ $('#where').textContent = '没认出坐标。试试 38.7075,-9.1364'; return }
-    jumpTo(parseFloat(m[1]), parseFloat(m[2]), null);
+    if (m){                                   // 坐标或地图链接
+      $('#results').hidden = true; $('#coords').value = '';
+      jumpTo(parseFloat(m[1]), parseFloat(m[2]), null, null);
+    } else {
+      searchPlace(raw);                       // 当成地名
+    }
   };
   $('#coords').addEventListener('keydown', e=>{ if (e.key === 'Enter') $('#goCoords').click() });
   $('#motionBtn').onclick = ()=> MOTION.toggle();
@@ -517,13 +569,15 @@ function frame(){
     $('#totals').textContent = '今天 ' + Math.round(S.today).toLocaleString('en-US') +
       ' m · 累计 ' + (S.total / 1000).toFixed(1) + ' km';
     const p = PRESETS.find(p => Math.abs(p.lat - S.lat) < 0.02 && Math.abs(p.lon - S.lon) < 0.02);
+    if (p && !S.place) S.place = null;
     let clock = '';
     if (p){ try{
       clock = ' · 当地 ' + new Intl.DateTimeFormat('zh-CN',
         {timeZone:p.tz, hour:'2-digit', minute:'2-digit', hour12:false}).format(new Date());
     }catch(e){} }
-    $('#navLabel').textContent = (p ? p.n.split(' · ')[0] : '去哪儿');
-    $('#where').innerHTML = '<b>' + S.lat.toFixed(5) + ', ' + S.lon.toFixed(5) + '</b>' +
+    $('#navLabel').textContent = S.place || (p ? p.n.split(' · ')[0] : '去哪儿');
+    $('#where').innerHTML = (S.place ? '<b>' + S.place + '</b><br>' : '') +
+      '<b>' + S.lat.toFixed(5) + ', ' + S.lon.toFixed(5) + '</b>' +
       ' · 朝向 ' + Math.round(S.heading) + '°' +
       (S.groundKnown ? '' : ' · 正在贴地…') + clock;
   }
