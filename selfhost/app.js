@@ -103,6 +103,13 @@ function moveLatLon(lat, lon, bearingDeg, meters){
   return [p2*180/Math.PI, ((l2*180/Math.PI + 540) % 360) - 180];
 }
 
+function distBetween(la1, lo1, la2, lo2){
+  const R = R_EARTH, p1 = la1*Math.PI/180, p2 = la2*Math.PI/180;
+  const dp = (la2-la1)*Math.PI/180, dl = (lo2-lo1)*Math.PI/180;
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
 /* ============================================================
    状态
    ============================================================ */
@@ -362,6 +369,48 @@ async function sampleGround(force){
   }catch(e){}
 }
 
+/* ---------- 点地面走过去（像 Street View，但不限于拍摄点） ---------- */
+let glide = null;
+
+function clickMove(e){
+  if (glide) return;
+  const rect = scene.canvas.getBoundingClientRect();
+  const pos = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top);
+  let cart = null;
+  try{
+    if (scene.pickPositionSupported) cart = scene.pickPosition(pos);
+    if (!cart && camera.pickEllipsoid) cart = camera.pickEllipsoid(pos, Cesium.Ellipsoid.WGS84);
+  }catch(err){}
+  if (!cart) return;                                   // 点到天上了
+  const c = Cesium.Cartographic.fromCartesian(cart);
+  if (!c) return;
+  const lat = Cesium.Math.toDegrees(c.latitude), lon = Cesium.Math.toDegrees(c.longitude);
+  const d = distBetween(S.lat, S.lon, lat, lon);
+  if (d < 0.5 || d > 4000) return;                     // 太近没意义，太远多半是误触
+  ripple(e.clientX, e.clientY);
+  glide = {
+    t0: performance.now(), dur: Math.min(900, 280 + d * 8),
+    fromLat: S.lat, fromLon: S.lon, fromG: S.ground,
+    toLat: lat, toLon: lon, toG: isFinite(c.height) ? c.height : S.ground
+  };
+  toast('移动 ' + Math.round(d) + ' m');
+}
+
+function ripple(x, y){
+  const el = document.createElement('i');
+  el.className = 'ripple'; el.style.left = x + 'px'; el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(()=> el.remove(), 600);
+}
+let toastEl = null, toastT = null;
+function toast(text){
+  if (!toastEl){ toastEl = document.createElement('div'); toastEl.className = 'toast'; }
+  toastEl.textContent = text;
+  document.body.appendChild(toastEl);
+  clearTimeout(toastT);
+  toastT = setTimeout(()=> toastEl.remove(), 1700);
+}
+
 const keys = Object.create(null);
 function bindKeys(){
   addEventListener('keydown', e=>{
@@ -373,11 +422,15 @@ function bindKeys(){
 
 function bindLook(){
   const cv = scene.canvas;
-  let drag = false, px = 0, py = 0;
-  cv.addEventListener('pointerdown', e=>{ drag = true; px = e.clientX; py = e.clientY;
-    cv.setPointerCapture && cv.setPointerCapture(e.pointerId) });
+  let drag = false, px = 0, py = 0, ox = 0, oy = 0, t0 = 0, moved = false;
+  cv.addEventListener('pointerdown', e=>{
+    drag = true; px = ox = e.clientX; py = oy = e.clientY;
+    t0 = performance.now(); moved = false;
+    cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+  });
   cv.addEventListener('pointermove', e=>{
     if (!drag) return;
+    if (Math.abs(e.clientX - ox) > 6 || Math.abs(e.clientY - oy) > 6) moved = true;
     const dx = e.clientX - px, dy = e.clientY - py;
     if (MOTION.steering) MOTION.head0 = (MOTION.head0 || 0) - dx * 0.22;
     else S.heading += dx * 0.22;
@@ -385,8 +438,12 @@ function bindLook(){
     else S.pitch = clamp(S.pitch - dy * 0.2, -85, 85);
     px = e.clientX; py = e.clientY;
   });
-  const up = ()=> drag = false;
-  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const up = e=>{
+    if (drag && !moved && performance.now() - t0 < 600 && e && e.clientX != null) clickMove(e);
+    drag = false;
+  };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', ()=> drag = false);
   cv.addEventListener('wheel', e=>{
     e.preventDefault();
     const f = camera.frustum;
@@ -426,13 +483,21 @@ function frame(){
   const now = performance.now();
   const dt = Math.min(0.08, (now - lastT) / 1000); lastT = now;
 
-  if (keys.w || keys.arrowup) advance(1.35 * dt);
-  if (keys.s || keys.arrowdown) advance(-1.1 * dt);
+  if (glide){
+    const k = Math.min(1, (now - glide.t0) / glide.dur);
+    const e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;
+    S.lat = glide.fromLat + (glide.toLat - glide.fromLat) * e;
+    S.lon = glide.fromLon + (glide.toLon - glide.fromLon) * e;
+    S.ground = glide.fromG + (glide.toG - glide.fromG) * e;
+    if (k >= 1){ glide = null; S.groundKnown = true; sampleGround(true); save() }
+  }
+  if (!glide && (keys.w || keys.arrowup)) advance(1.35 * dt);
+  if (!glide && (keys.s || keys.arrowdown)) advance(-1.1 * dt);
   if (keys.a || keys.arrowleft) S.heading -= 55 * dt;
   if (keys.d || keys.arrowright) S.heading += 55 * dt;
   S.heading = (S.heading % 360 + 360) % 360;
 
-  sampleGround(false);
+  if (!glide) sampleGround(false);
   MOTION.tick();
 
   camera.setView({

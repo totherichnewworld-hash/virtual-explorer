@@ -78,6 +78,15 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
   box-shadow:0 10px 30px -12px #000;user-select:none;touch-action:none}
 .cross{position:fixed;z-index:9;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
   pointer-events:none;opacity:.5}
+.ripple{position:fixed;z-index:9;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+  border:2px solid var(--fluoro);pointer-events:none;animation:rip .55s ease-out forwards}
+@keyframes rip{from{transform:scale(.35);opacity:.95}to{transform:scale(2.6);opacity:0}}
+.toast{position:fixed;z-index:13;left:50%;bottom:92px;transform:translateX(-50%);
+  background:#0C1420dd;border:1px solid var(--rule);border-radius:99px;padding:7px 15px;
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink);pointer-events:none;
+  animation:tin .25s ease-out}
+@keyframes tin{from{transform:translate(-50%,6px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.ripple,.toast{animation:none}}
 .cross::before,.cross::after{content:"";position:absolute;background:#fff}
 .cross::before{left:7px;top:0;width:1px;height:16px}
 .cross::after{top:7px;left:0;height:1px;width:16px}
@@ -112,7 +121,7 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
   </div>
   <p class="read" id="where">—</p>
   <p class="hint"><span id="mode" style="color:var(--ink-3)" title="静态托管无法隐藏 key；配额上限才是真正的防线">连接中…</span> · 影像 Google Photorealistic 3D Tiles<br>
-    拖动看四周 · 滚轮变焦 · W 前进 · A/D 转向 · R 回正<br>
+    <b>点地面就走过去</b> · 拖动看四周 · 滚轮变焦 · W 前进 · A/D 转向 · R 回正<br>
     版权标识必须保留在画面上。</p>
   </div>
 </div>
