@@ -13,14 +13,15 @@ const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 
 /* 起点：各城市的大致市中心。到了之后用键盘或体感自己走开。 */
 const PRESETS = [
-  {n:'里斯本 · 商业广场',      lat:38.70754, lon:-9.13647, h:340, tz:'Europe/Lisbon'},
-  {n:'京都 · 祇园四条',        lat:35.00370, lon:135.77200, h:20,  tz:'Asia/Tokyo'},
-  {n:'伊斯坦布尔 · 加拉塔塔',  lat:41.02560, lon:28.97410, h:200, tz:'Europe/Istanbul'},
-  {n:'纽约 · 华盛顿广场',      lat:40.73080, lon:-73.99730, h:0,   tz:'America/New_York'},
-  {n:'雷克雅未克 · 大教堂',    lat:64.14170, lon:-21.92660, h:180, tz:'Atlantic/Reykjavik'},
-  {n:'布宜诺斯艾利斯 · 多雷戈',lat:-34.62050,lon:-58.37170, h:40,  tz:'America/Argentina/Buenos_Aires'},
-  {n:'巴黎 · 蓬皮杜',          lat:48.86070, lon:2.35220,  h:250, tz:'Europe/Paris'},
-  {n:'香港 · 中环',            lat:22.28190, lon:114.15830, h:80,  tz:'Asia/Hong_Kong'}
+  // h 只是落地前的粗略海拔，贴地采样一到就会纠正
+  {n:'里斯本 · 商业广场',      lat:38.70754, lon:-9.13647, h:8,  tz:'Europe/Lisbon'},
+  {n:'京都 · 祇园四条',        lat:35.00370, lon:135.77200, h:45, tz:'Asia/Tokyo'},
+  {n:'伊斯坦布尔 · 加拉塔塔',  lat:41.02560, lon:28.97410, h:40, tz:'Europe/Istanbul'},
+  {n:'纽约 · 华盛顿广场',      lat:40.73080, lon:-73.99730, h:10, tz:'America/New_York'},
+  {n:'雷克雅未克 · 大教堂',    lat:64.14170, lon:-21.92660, h:40, tz:'Atlantic/Reykjavik'},
+  {n:'布宜诺斯艾利斯 · 多雷戈',lat:-34.62050,lon:-58.37170, h:12, tz:'America/Argentina/Buenos_Aires'},
+  {n:'巴黎 · 蓬皮杜',          lat:48.86070, lon:2.35220,  h:35, tz:'Europe/Paris'},
+  {n:'香港 · 中环',            lat:22.28190, lon:114.15830, h:12, tz:'Asia/Hong_Kong'}
 ];
 
 /* ---------- 瓦片从哪来 ----------
@@ -115,7 +116,8 @@ function distBetween(la1, lo1, la2, lo2){
    ============================================================ */
 const S = {
   lat:PRESETS[0].lat, lon:PRESETS[0].lon, heading:0, pitch:0,
-  ground:PRESETS[0].h, groundKnown:false, session:0, today:0, total:0, day:''
+  ground:PRESETS[0].h, groundKnown:false, session:0, today:0, total:0, day:'',
+  alt:0, pitchOff:0            // 空降时的额外高度与俯角，落地后归零
 };
 try{
   const raw = localStorage.getItem('citywalk-earth');
@@ -306,6 +308,10 @@ async function boot(){
   try{
     tileset = await Cesium.Cesium3DTileset.fromUrl(src.url,
       { showCreditsOnScreen:true, maximumScreenSpaceError:16 });
+    // 贴地视角看得远，远处不需要那么精细 —— 这个开关是专门给这种情况的
+    try{ tileset.dynamicScreenSpaceError = true }catch(e){}
+    // 缓存放大到 1 GB：走回头路、来回切城市时就不用重下
+    try{ tileset.cacheBytes = 1024 * 1024 * 1024 }catch(e){}
     scene.primitives.add(tileset);
     $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器 · 配额已封顶';
     $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--ink-3)';
@@ -350,7 +356,21 @@ function jumpTo(lat, lon, groundGuess, name){
   S.lat = lat; S.lon = lon;
   S.ground = groundGuess != null ? groundGuess : S.ground;
   S.groundKnown = false; S.session = 0;
+  descend();                       // 先停在高处，等粗瓦片铺开，再落下来
   sampleGround(true);
+}
+
+/* 从高空落到街面：粗瓦片几块就能铺满视野，先看到轮廓，
+   下降过程里细节一层层补上 —— 等待时间变成了降落过程本身。 */
+function descend(){
+  S.alt = 260; S.pitchOff = -34;
+  if (tileset) tileset.maximumScreenSpaceError = 32;   // 下降途中放粗，换速度
+  glide = {
+    t0: performance.now(), dur: 2400, kind: 'descend',
+    fromLat: S.lat, fromLon: S.lon, fromG: null,   // 高度让 sampleGround 说了算
+    toLat: S.lat, toLon: S.lon, toG: null,
+    fromAlt: 260, toAlt: 0, fromPitch: -34, toPitch: 0
+  };
 }
 
 /* 把相机贴到瓦片表面：采样它脚下的高度 */
@@ -364,7 +384,10 @@ async function sampleGround(force){
     const out = await scene.sampleHeightMostDetailed([carto]);
     const h = out && out[0] && out[0].height;
     if (typeof h === 'number' && isFinite(h)){
-      S.ground = S.groundKnown ? S.ground + (h - S.ground) * 0.35 : h;
+      // 换了城市（落差很大）就直接对齐；走路中的小起伏才平滑跟随
+      S.ground = (!S.groundKnown || Math.abs(h - S.ground) > 25)
+        ? h
+        : S.ground + (h - S.ground) * 0.35;
       S.groundKnown = true;
     }
   }catch(e){}
@@ -435,6 +458,7 @@ function clickMove(e){
   if (d < 0.5 || d > 4000) return;                     // 太近没意义，太远多半是误触
   ripple(e.clientX, e.clientY);
   glide = {
+    fromAlt: null,
     t0: performance.now(), dur: Math.min(900, 280 + d * 8),
     fromLat: S.lat, fromLon: S.lon, fromG: S.ground,
     toLat: lat, toLon: lon, toG: isFinite(c.height) ? c.height : S.ground
@@ -540,8 +564,17 @@ function frame(){
     const e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;
     S.lat = glide.fromLat + (glide.toLat - glide.fromLat) * e;
     S.lon = glide.fromLon + (glide.toLon - glide.fromLon) * e;
-    S.ground = glide.fromG + (glide.toG - glide.fromG) * e;
-    if (k >= 1){ glide = null; S.groundKnown = true; sampleGround(true); save() }
+    if (glide.fromG != null) S.ground = glide.fromG + (glide.toG - glide.fromG) * e;
+    if (glide.fromAlt != null){
+      S.alt      = glide.fromAlt   + (glide.toAlt   - glide.fromAlt)   * e;
+      S.pitchOff = glide.fromPitch + (glide.toPitch - glide.fromPitch) * e;
+    }
+    if (k >= 1){
+      const wasDescent = glide.kind === 'descend';
+      glide = null; S.alt = 0; S.pitchOff = 0;
+      S.groundKnown = true; sampleGround(true); save();
+      if (wasDescent && tileset) tileset.maximumScreenSpaceError = 16;  // 站定了，再要细节
+    }
   }
   if (!glide && (keys.w || keys.arrowup)) advance(1.35 * dt);
   if (!glide && (keys.s || keys.arrowdown)) advance(-1.1 * dt);
@@ -553,10 +586,10 @@ function frame(){
   MOTION.tick();
 
   camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(S.lon, S.lat, S.ground + EYE),
+    destination: Cesium.Cartesian3.fromDegrees(S.lon, S.lat, S.ground + EYE + S.alt),
     orientation: {
       heading: Cesium.Math.toRadians(S.heading),
-      pitch:   Cesium.Math.toRadians(S.pitch),
+      pitch:   Cesium.Math.toRadians(clamp(S.pitch + S.pitchOff, -89, 89)),
       roll: 0
     }
   });
@@ -575,11 +608,16 @@ function frame(){
       clock = ' · 当地 ' + new Intl.DateTimeFormat('zh-CN',
         {timeZone:p.tz, hour:'2-digit', minute:'2-digit', hour12:false}).format(new Date());
     }catch(e){} }
-    $('#navLabel').textContent = S.place || (p ? p.n.split(' · ')[0] : '去哪儿');
+    let pending = 0;
+    try{ pending = tileset.statistics.numberOfPendingRequests | 0 }catch(e){}
+    $('#navLabel').textContent = pending > 0
+      ? '载入 ' + pending + ' 块…'
+      : (S.place || (p ? p.n.split(' · ')[0] : '去哪儿'));
     $('#where').innerHTML = (S.place ? '<b>' + S.place + '</b><br>' : '') +
       '<b>' + S.lat.toFixed(5) + ', ' + S.lon.toFixed(5) + '</b>' +
       ' · 朝向 ' + Math.round(S.heading) + '°' +
-      (S.groundKnown ? '' : ' · 正在贴地…') + clock;
+      (S.groundKnown ? '' : ' · 正在贴地…') +
+      (pending > 0 ? ' · 载入 ' + pending + ' 块' : '') + clock;
   }
 }
 
