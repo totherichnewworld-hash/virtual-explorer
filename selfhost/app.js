@@ -285,7 +285,11 @@ const MOTION = {
 /* ============================================================
    Cesium
    ============================================================ */
-let viewer, scene, camera, tileset, lastSample = 0;
+let viewer, scene, camera, tileset, lastSample = 0, lastCheap = 0;
+
+// 手机屏幕小，瓦片精度松一档肉眼几乎看不出，块数少一大截
+const SMALL = matchMedia('(max-width: 700px)').matches || (navigator.maxTouchPoints || 0) > 1;
+const BASE_SSE = SMALL ? 24 : 16;
 
 async function boot(){
   const src = await resolveTileSource();
@@ -293,6 +297,13 @@ async function boot(){
   $('#setup').hidden = true;
   $('#navPanel').hidden = $('#hud').hidden = $('#cross').hidden = false;
   $('#walkBtn').hidden = false;
+
+  // Cesium 默认每个服务器只开 6 条并发 —— HTTP/1.1 时代的保守值。
+  // Google 瓦片服务器走 HTTP/2（多路复用），放开到 18 条，这是最大的一处提速。
+  try{
+    Cesium.RequestScheduler.maximumRequestsPerServer = 18;
+    Cesium.RequestScheduler.maximumRequests = 64;
+  }catch(e){}
 
   viewer = new Cesium.Viewer('globe', {
     globe:false, baseLayerPicker:false, geocoder:false, homeButton:false,
@@ -306,12 +317,21 @@ async function boot(){
   scene.fog.enabled = true;
 
   try{
-    tileset = await Cesium.Cesium3DTileset.fromUrl(src.url,
-      { showCreditsOnScreen:true, maximumScreenSpaceError:16 });
-    // 贴地视角看得远，远处不需要那么精细 —— 这个开关是专门给这种情况的
-    try{ tileset.dynamicScreenSpaceError = true }catch(e){}
-    // 缓存放大到 1 GB：走回头路、来回切城市时就不用重下
-    try{ tileset.cacheBytes = 1024 * 1024 * 1024 }catch(e){}
+    tileset = await Cesium.Cesium3DTileset.fromUrl(src.url, {
+      showCreditsOnScreen: true,
+      maximumScreenSpaceError: BASE_SSE,
+      skipLevelOfDetail: true,        // 不必把中间每层都下完，直奔目标精度
+      baseScreenSpaceError: 1024,
+      skipScreenSpaceErrorFactor: 16,
+      skipLevels: 1,
+      loadSiblings: false,
+      preferLeaves: true,
+      progressiveResolutionHeightFraction: 0.5,  // 先铺一版低清，画面尽快有东西
+      foveatedScreenSpaceError: true,
+      foveatedConeSize: 0.15                     // 屏幕中心优先，边缘可以慢
+    });
+    try{ tileset.dynamicScreenSpaceError = true }catch(e){}   // 远处自动降精度
+    try{ tileset.cacheBytes = 1024 * 1024 * 1024 }catch(e){}  // 走回头路不重下
     scene.primitives.add(tileset);
     $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器 · 配额已封顶';
     $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--ink-3)';
@@ -364,7 +384,7 @@ function jumpTo(lat, lon, groundGuess, name){
    下降过程里细节一层层补上 —— 等待时间变成了降落过程本身。 */
 function descend(){
   S.alt = 260; S.pitchOff = -34;
-  if (tileset) tileset.maximumScreenSpaceError = 32;   // 下降途中放粗，换速度
+  if (tileset && !fastMode) tileset.maximumScreenSpaceError = 40;  // 下降途中放粗，换速度
   glide = {
     t0: performance.now(), dur: 2400, kind: 'descend',
     fromLat: S.lat, fromLon: S.lon, fromG: null,   // 高度让 sampleGround 说了算
@@ -373,11 +393,33 @@ function descend(){
   };
 }
 
-/* 把相机贴到瓦片表面：采样它脚下的高度 */
+/* 贴地高度，两条路：
+   便宜的 clampToHeight —— 只用「已经渲染出来的」瓦片，一个请求都不发；
+   昂贵的 sampleHeightMostDetailed —— 会强行拉取该点最高精度的瓦片，
+   和你眼前的街景抢带宽。平时只走前者，后者留给刚落地和前者拿不到值的时候。 */
+function clampGroundCheap(){
+  try{
+    if (!scene.clampToHeightSupported) return false;
+    const from = Cesium.Cartesian3.fromDegrees(S.lon, S.lat, S.ground + 60);
+    const hit = scene.clampToHeight(from);
+    if (!hit) return false;
+    const h = Cesium.Cartographic.fromCartesian(hit).height;
+    if (typeof h !== 'number' || !isFinite(h)) return false;
+    S.ground = (!S.groundKnown || Math.abs(h - S.ground) > 25) ? h : S.ground + (h - S.ground) * 0.35;
+    S.groundKnown = true;
+    return true;
+  }catch(e){ return false }
+}
+
 async function sampleGround(force){
-  if (!scene.sampleHeightSupported) return;
   const now = performance.now();
-  if (!force && now - lastSample < 400) return;
+  if (!force){
+    if (now - lastCheap < 220) return;
+    lastCheap = now;
+    if (clampGroundCheap()) return;          // 够用了，不发请求
+    if (now - lastSample < 2500) return;     // 拿不到才退回昂贵采样，并限流
+  }
+  if (!scene.sampleHeightSupported) return;
   lastSample = now;
   const carto = Cesium.Cartographic.fromDegrees(S.lon, S.lat);
   try{
@@ -439,7 +481,7 @@ async function searchPlace(q){
 }
 
 /* ---------- 点地面走过去（像 Street View，但不限于拍摄点） ---------- */
-let glide = null;
+let glide = null, fastMode = false;
 
 function clickMove(e){
   if (glide) return;
@@ -592,6 +634,13 @@ function bindButtons(){
     e.currentTarget.setAttribute('aria-pressed', String(MOTION.absolute));
   };
   $('#sens').oninput = e=> MOTION.thresh = parseFloat(e.target.value);
+  $('#qualityBtn').onclick = e=>{
+    fastMode = !fastMode;
+    e.currentTarget.setAttribute('aria-pressed', String(fastMode));
+    e.currentTarget.textContent = fastMode ? '画质：流畅' : '画质：清晰';
+    if (tileset) tileset.maximumScreenSpaceError = fastMode ? 40 : BASE_SSE;
+    toast(fastMode ? '少要细节，先图快' : '要细节，会慢一点');
+  };
   if (!MOTION.supported()){ $('#motionBtn').disabled = true; MOTION.say('这台设备没有运动传感器') }
   const wb = $('#walkBtn');
   const dn = e=>{ e.preventDefault(); keys.w = true };
@@ -619,7 +668,7 @@ function frame(){
       const wasDescent = glide.kind === 'descend';
       glide = null; S.alt = 0; S.pitchOff = 0;
       S.groundKnown = true; sampleGround(true); save();
-      if (wasDescent && tileset) tileset.maximumScreenSpaceError = 16;  // 站定了，再要细节
+      if (wasDescent && tileset && !fastMode) tileset.maximumScreenSpaceError = BASE_SSE;
     }
   }
   if (!glide && (keys.w || keys.arrowup)) advance(1.35 * dt);
