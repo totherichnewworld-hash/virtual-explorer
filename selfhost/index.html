@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>街区兑换所 · 真实地球版</title>
 <script>window.CESIUM_BASE_URL='https://cdn.jsdelivr.net/npm/cesium@1.144.0/Build/Cesium/';</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.144.0/Build/Cesium/Widgets/widgets.css">
@@ -28,8 +28,9 @@ html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);
   color:#cfd8e3!important;text-shadow:0 1px 2px #000}
 .panel{position:fixed;z-index:10;background:var(--paper-2);border:1px solid var(--rule);
   border-radius:4px;backdrop-filter:blur(9px);padding:13px 14px}
-.tl{left:14px;top:14px;max-width:330px}
-.br{right:14px;bottom:14px;width:min(320px,calc(100vw - 28px))}
+.tl{left:calc(14px + env(safe-area-inset-left));top:calc(14px + env(safe-area-inset-top));max-width:330px}
+.br{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));
+  width:min(320px,calc(100vw - 28px))}
 .ptoggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
   background:none;border:0;padding:0;cursor:pointer;font-family:var(--f-mono);
   font-size:11px;letter-spacing:.08em;color:var(--ink-3)}
@@ -83,7 +84,8 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
   border-radius:3px;color:var(--gold);word-break:break-all}
 .setup .warn{border-left:3px solid var(--fluoro);padding-left:11px;margin-top:16px;
   font-size:13px;color:var(--ink-2);line-height:1.75}
-.walk{position:fixed;z-index:11;left:50%;transform:translateX(-50%);bottom:20px;
+.walk{position:fixed;z-index:11;left:50%;transform:translateX(-50%);
+  bottom:calc(20px + env(safe-area-inset-bottom));
   background:var(--fluoro);color:#1A0D07;border:0;border-radius:99px;padding:14px 30px;
   font-family:var(--f-mono);font-size:13px;letter-spacing:.06em;cursor:pointer;
   box-shadow:0 10px 30px -12px #000;user-select:none;touch-action:none}
@@ -103,10 +105,10 @@ input[type=range]{accent-color:var(--fluoro);width:92px}
 .cross::after{top:7px;left:0;height:1px;width:16px}
 @media (max-width:560px){
   .tl{max-width:calc(100vw - 28px);left:10px;top:10px}
-  .br{bottom:88px;right:10px;width:min(300px,calc(100vw - 20px))}
+  .br{bottom:calc(88px + env(safe-area-inset-bottom));right:10px;width:min(300px,calc(100vw - 20px))}
   .panel{padding:11px 12px}
   .panel.collapsed{padding:8px 11px}
-  .walk{bottom:16px;padding:15px 34px}
+  .walk{bottom:calc(16px + env(safe-area-inset-bottom));padding:15px 34px}
   .big{font-size:26px}
   .row{margin-top:8px}
 }

@@ -490,15 +490,43 @@ function bindKeys(){
   addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 }
 
+function setFov(v){
+  const f = camera.frustum;
+  if (f && f.fov != null) f.fov = clamp(v, 0.34, 1.55);   // 约 20° ~ 89°
+}
+
 function bindLook(){
   const cv = scene.canvas;
   let drag = false, px = 0, py = 0, ox = 0, oy = 0, t0 = 0, moved = false;
+  const ptrs = new Map();                 // 多指跟踪，用来做捏合
+  let pinch0 = 0, fov0 = 0, lastTap = 0, lastTapX = 0, lastTapY = 0;
+
+  const spread = ()=>{
+    const [a, b] = [...ptrs.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+
+  // Safari 会无视 user-scalable，得把它自己的手势事件也挡掉
+  ['gesturestart','gesturechange','gestureend'].forEach(t=>
+    document.addEventListener(t, e=> e.preventDefault(), {passive:false}));
+
   cv.addEventListener('pointerdown', e=>{
+    ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (ptrs.size === 2){                 // 第二根手指落下 → 进入捏合
+      pinch0 = spread(); fov0 = camera.frustum.fov; moved = true; drag = false;
+      return;
+    }
     drag = true; px = ox = e.clientX; py = oy = e.clientY;
     t0 = performance.now(); moved = false;
-    cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+    try{ cv.setPointerCapture && cv.setPointerCapture(e.pointerId) }catch(err){}
   });
   cv.addEventListener('pointermove', e=>{
+    if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (ptrs.size >= 2){                  // 捏合中：只缩放，不转视角
+      const d = spread();
+      if (pinch0 > 0 && d > 0) setFov(fov0 * (pinch0 / d));
+      return;
+    }
     if (!drag) return;
     if (Math.abs(e.clientX - ox) > 6 || Math.abs(e.clientY - oy) > 6) moved = true;
     const dx = e.clientX - px, dy = e.clientY - py;
@@ -509,15 +537,33 @@ function bindLook(){
     px = e.clientX; py = e.clientY;
   });
   const up = e=>{
-    if (drag && !moved && performance.now() - t0 < 600 && e && e.clientX != null) clickMove(e);
+    if (e && e.pointerId != null) ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) pinch0 = 0;
+    if (ptrs.size === 1){                 // 松掉一根手指，重新锚定另一根
+      const [only] = [...ptrs.values()];
+      px = only.x; py = only.y; drag = true; moved = true;
+      return;
+    }
+    if (drag && !moved && performance.now() - t0 < 600 && e && e.clientX != null){
+      const now = performance.now();
+      const sameSpot = Math.abs(e.clientX - lastTapX) < 24 && Math.abs(e.clientY - lastTapY) < 24;
+      if (now - lastTap < 320 && sameSpot){      // 同一处连点两下 = 视角回正
+        lastTap = 0; S.pitch = 0; setFov(1.08); toast('视角回正');
+      } else {
+        lastTap = now; lastTapX = e.clientX; lastTapY = e.clientY;
+        clickMove(e);
+      }
+    }
     drag = false;
   };
   cv.addEventListener('pointerup', up);
-  cv.addEventListener('pointercancel', ()=> drag = false);
+  cv.addEventListener('pointercancel', e=>{
+    if (e && e.pointerId != null) ptrs.delete(e.pointerId);
+    drag = false; pinch0 = 0;
+  });
   cv.addEventListener('wheel', e=>{
     e.preventDefault();
-    const f = camera.frustum;
-    if (f.fov != null) f.fov = clamp(f.fov + Math.sign(e.deltaY) * 0.06, 0.5, 1.6);
+    setFov(camera.frustum.fov + Math.sign(e.deltaY) * 0.06);
   }, {passive:false});
 }
 
