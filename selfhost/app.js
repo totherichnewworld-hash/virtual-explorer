@@ -117,7 +117,8 @@ function distBetween(la1, lo1, la2, lo2){
 const S = {
   lat:PRESETS[0].lat, lon:PRESETS[0].lon, heading:0, pitch:0,
   ground:PRESETS[0].h, groundKnown:false, session:0, today:0, total:0, day:'',
-  alt:0, pitchOff:0            // 空降时的额外高度与俯角，落地后归零
+  alt:0, pitchOff:0,           // 空降时的额外高度与俯角，落地后归零
+  mode:'photo'                 // photo / white / lite / riso
 };
 try{
   const raw = localStorage.getItem('citywalk-earth');
@@ -130,7 +131,7 @@ function save(){
   clearTimeout(saveT);
   saveT = setTimeout(()=>{
     try{ localStorage.setItem('citywalk-earth', JSON.stringify({
-      lat:S.lat, lon:S.lon, heading:S.heading,
+      lat:S.lat, lon:S.lon, heading:S.heading, mode:S.mode,
       today:S.today, total:S.total, day:S.day })) }catch(e){}
   }, 700);
 }
@@ -292,8 +293,6 @@ const SMALL = matchMedia('(max-width: 700px)').matches || (navigator.maxTouchPoi
 const BASE_SSE = SMALL ? 24 : 16;
 
 async function boot(){
-  const src = await resolveTileSource();
-  if (!src) return;                       // 停在配置说明页
   $('#setup').hidden = true;
   $('#navPanel').hidden = $('#hud').hidden = $('#cross').hidden = false;
   $('#walkBtn').hidden = false;
@@ -306,7 +305,7 @@ async function boot(){
   }catch(e){}
 
   viewer = new Cesium.Viewer('globe', {
-    globe:false, baseLayerPicker:false, geocoder:false, homeButton:false,
+    baseLayerPicker:false, geocoder:false, homeButton:false,
     sceneModePicker:false, navigationHelpButton:false, animation:false,
     timeline:false, fullscreenButton:false, infoBox:false, selectionIndicator:false,
     requestRenderMode:false
@@ -316,37 +315,235 @@ async function boot(){
   scene.skyAtmosphere.show = true;
   scene.fog.enabled = true;
 
-  try{
-    tileset = await Cesium.Cesium3DTileset.fromUrl(src.url, {
-      showCreditsOnScreen: true,
-      maximumScreenSpaceError: BASE_SSE,
-      skipLevelOfDetail: true,        // 不必把中间每层都下完，直奔目标精度
-      baseScreenSpaceError: 1024,
-      skipScreenSpaceErrorFactor: 16,
-      skipLevels: 1,
-      loadSiblings: false,
-      preferLeaves: true,
-      progressiveResolutionHeightFraction: 0.5,  // 先铺一版低清，画面尽快有东西
-      foveatedScreenSpaceError: true,
-      foveatedConeSize: 0.15                     // 屏幕中心优先，边缘可以慢
-    });
-    try{ tileset.dynamicScreenSpaceError = true }catch(e){}   // 远处自动降精度
-    try{ tileset.cacheBytes = 1024 * 1024 * 1024 }catch(e){}  // 走回头路不重下
-    scene.primitives.add(tileset);
-    $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器 · 配额已封顶';
-    $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--ink-3)';
-  }catch(err){
-    await showTileError(src, err);
-    return;
-  }
-
   buildPresets();
   bindPanels();
   bindLook();
   bindKeys();
   bindButtons();
+  bindModes();
+  await applyMode(S.mode || 'photo');
   jumpTo(S.lat, S.lon, S.ground);
   scene.preRender.addEventListener(frame);
+}
+
+/* ============================================================
+   四种数据源
+   ============================================================ */
+const MODE_HINT = {
+  photo: 'Google 真实影像 —— 最真实，也最重',
+  white: 'Cesium OSM Buildings 白模 —— 很轻，需要一个免费 ion token',
+  lite:  'OSM 现查建筑轮廓 —— 免 key，最快',
+  riso:  '真实轮廓 + 手绘立面 —— 免 key，这一版别处没有'
+};
+let osmTileset = null, osmSource = null, osmBusy = false;
+let osmLat = null, osmLon = null;
+
+const ionToken = ()=>{ try{ return localStorage.getItem('citywalk-ion') || '' }catch(e){ return '' } };
+
+function clearLayers(){
+  if (tileset){ try{ scene.primitives.remove(tileset) }catch(e){} tileset = null }
+  if (osmTileset){ try{ scene.primitives.remove(osmTileset) }catch(e){} osmTileset = null }
+  if (osmSource){ try{ viewer.dataSources.remove(osmSource, true) }catch(e){} osmSource = null }
+  osmLat = osmLon = null;
+  try{ viewer.imageryLayers.removeAll() }catch(e){}
+}
+
+async function applyMode(m){
+  if (!MODE_HINT[m]) m = 'photo';
+  S.mode = m; save();
+  document.querySelectorAll('#modes button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  $('#modeHint').textContent = MODE_HINT[m];
+  $('#tokenBox').classList.toggle('on', m === 'white' && !ionToken());
+  clearLayers();
+
+  if (m === 'photo'){
+    scene.globe.show = false;
+    if (!(await loadPhoto())) return applyMode('lite');   // 没 key 就退到免 key 的那档
+    return;
+  }
+
+  // 其余三种：地面用椭球，零延迟、零请求，高度一律按 0 算
+  scene.globe.show = true;
+  scene.globe.baseColor = Cesium.Color.fromCssColorString(m === 'riso' ? '#C9CCC0' : '#5E6A5E');
+  S.ground = 0; S.groundKnown = true; S.alt = 0;
+  if (m !== 'riso') await addImagery();      // 画风版不铺卫星照，保持版画感
+  if (m === 'white') await loadWhite();
+  else await loadOsm(m === 'riso', true);
+}
+
+async function loadPhoto(){
+  const src = await resolveTileSource();
+  if (!src){ $('#modeHint').textContent = '照片模式需要 Google key —— 先用别的档'; return false }
+  try{
+    tileset = await Cesium.Cesium3DTileset.fromUrl(src.url, {
+      showCreditsOnScreen: true,
+      maximumScreenSpaceError: fastMode ? 40 : BASE_SSE,
+      skipLevelOfDetail: true, baseScreenSpaceError: 1024,
+      skipScreenSpaceErrorFactor: 16, skipLevels: 1,
+      loadSiblings: false, preferLeaves: true,
+      progressiveResolutionHeightFraction: 0.5,
+      foveatedScreenSpaceError: true, foveatedConeSize: 0.15
+    });
+    try{ tileset.dynamicScreenSpaceError = true }catch(e){}
+    try{ tileset.cacheBytes = 1024 * 1024 * 1024 }catch(e){}
+    scene.primitives.add(tileset);
+    $('#mode').textContent = src.mode === 'proxy' ? 'key 在服务端' : 'key 在浏览器 · 配额已封顶';
+    $('#mode').style.color = src.mode === 'proxy' ? 'var(--moss)' : 'var(--ink-3)';
+    return true;
+  }catch(err){ await showTileError(src, err); return false }
+}
+
+async function loadWhite(){
+  const t = ionToken();
+  if (!t){
+    $('#modeHint').textContent = '白模要一个免费的 Cesium ion token（cesium.com 注册，不要信用卡），粘到下面那个框里';
+    return;
+  }
+  try{
+    Cesium.Ion.defaultAccessToken = t;
+    osmTileset = await Cesium.createOsmBuildingsAsync();
+    scene.primitives.add(osmTileset);
+    $('#modeHint').textContent = '全球 OSM 白模 · 建筑轮廓和高度是真的';
+  }catch(e){
+    $('#modeHint').textContent = 'token 没通过：' + String(e && e.message || e).slice(0, 90);
+    $('#tokenBox').classList.add('on');
+  }
+}
+
+async function addImagery(){
+  try{
+    const prov = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer');
+    viewer.imageryLayers.addImageryProvider(prov);
+  }catch(e){ /* 拿不到就留纯色地面，不影响走路 */ }
+}
+
+/* ---------- OSM 建筑：现查现挤 ---------- */
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter'
+];
+
+function heightOf(tags){
+  const h = parseFloat(tags.height || tags['building:height']);
+  if (isFinite(h) && h > 0) return Math.max(3, h);
+  const lv = parseFloat(tags['building:levels']);
+  if (isFinite(lv) && lv > 0) return Math.max(3, lv * 3.2 + 1);
+  return 9.6;                                    // 没标就按三层算
+}
+function ringOf(el){
+  if (el.geometry && el.geometry.length) return el.geometry;
+  if (el.members){
+    const outer = el.members.find(m => m.role !== 'inner' && m.geometry && m.geometry.length);
+    if (outer) return outer.geometry;
+  }
+  return null;
+}
+function hashStr(str){
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return h >>> 0;
+}
+
+async function loadOsm(styled, force){
+  if (osmBusy) return;
+  if (!force && osmLat != null && distBetween(S.lat, S.lon, osmLat, osmLon) < 260) return;
+  osmBusy = true; osmLat = S.lat; osmLon = S.lon;
+  $('#modeHint').textContent = '正在取这一带的建筑…';
+  const R = 420, lat = S.lat.toFixed(6), lon = S.lon.toFixed(6);
+  const q = '[out:json][timeout:25];(' +
+    'way["building"](around:' + R + ',' + lat + ',' + lon + ');' +
+    'relation["building"]["type"="multipolygon"](around:' + R + ',' + lat + ',' + lon + ');' +
+    ');out geom;';
+  let data = null;
+  for (const url of OVERPASS){
+    try{
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(q)
+      });
+      if (r.ok){ data = await r.json(); break }
+    }catch(e){}
+  }
+  osmBusy = false;
+  if (!data){
+    $('#modeHint').textContent = '取不到 OSM 数据（Overpass 忙或被挡住了），过一会儿再试';
+    return;
+  }
+  buildBuildings(data.elements || [], styled);
+}
+
+const RISO_WALLS = ['#E8DCC6','#D3C7A8','#C6D6D2','#E3C9B6','#C9D4E0','#EFE3D0','#D8C0C4'];
+
+function facadeCanvas(seed){
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const wall = RISO_WALLS[seed % RISO_WALLS.length];
+  g.fillStyle = wall; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = 'rgba(22,36,63,.14)';                    // 楼层分隔线
+  for (let y = 0; y < 128; y += 42) g.fillRect(0, y, 128, 2);
+  g.fillStyle = 'rgba(22,36,63,.72)';                    // 窗
+  for (let y = 12; y < 128; y += 42)
+    for (let x = 12; x < 128; x += 32) g.fillRect(x, y, 16, 22);
+  g.fillStyle = 'rgba(255,255,255,.35)';                 // 窗台高光
+  for (let y = 12; y < 128; y += 42)
+    for (let x = 12; x < 128; x += 32) g.fillRect(x, y + 22, 16, 3);
+  return c;
+}
+
+function facadeMaterial(seed, ring, h){
+  let per = 0;
+  for (let i = 1; i < ring.length; i++)
+    per += distBetween(ring[i-1].lat, ring[i-1].lon, ring[i].lat, ring[i].lon);
+  return new Cesium.ImageMaterialProperty({
+    image: facadeCanvas(seed),
+    repeat: new Cesium.Cartesian2(Math.max(1, Math.round(per / 12)),
+                                  Math.max(1, Math.round(h / 9.6)))
+  });
+}
+
+function buildBuildings(els, styled){
+  if (osmSource){ try{ viewer.dataSources.remove(osmSource, true) }catch(e){} osmSource = null }
+  const ds = new Cesium.CustomDataSource('osm');
+  const ink = Cesium.Color.fromCssColorString(styled ? '#16243F' : '#1B2530').withAlpha(0.5);
+  let n = 0;
+  for (const el of els){
+    const ring = ringOf(el);
+    if (!ring || ring.length < 4) continue;
+    const flat = [];
+    for (const pt of ring){ flat.push(pt.lon, pt.lat) }
+    const h = heightOf(el.tags || {});
+    const seed = hashStr((el.type || 'w') + ':' + el.id);
+    ds.entities.add({
+      polygon: {
+        hierarchy: Cesium.Cartesian3.fromDegreesArray(flat),
+        height: 0, extrudedHeight: h, closeTop: true,
+        material: styled
+          ? facadeMaterial(seed, ring, h)
+          : Cesium.Color.fromCssColorString('#EDEDE6').withAlpha(1),
+        outline: true, outlineColor: ink
+      }
+    });
+    if (++n > 1400) break;                  // 密集市中心也不至于卡死
+  }
+  viewer.dataSources.add(ds).then(()=>{ osmSource = ds });
+  $('#modeHint').textContent = n + ' 栋建筑 · ' + (styled ? '手绘立面' : '轻量白模') + ' · 免 key';
+}
+
+function bindModes(){
+  document.querySelectorAll('#modes button').forEach(b =>
+    b.addEventListener('click', ()=> applyMode(b.dataset.mode)));
+  $('#saveToken').onclick = ()=>{
+    const v = $('#ionToken').value.trim();
+    if (!v) return;
+    try{ localStorage.setItem('citywalk-ion', v) }catch(e){}
+    $('#ionToken').value = '';
+    $('#tokenBox').classList.remove('on');
+    applyMode('white');
+  };
 }
 
 /* 手机上默认把两块面板收起来，别挡着街景 */
@@ -375,9 +572,16 @@ function jumpTo(lat, lon, groundGuess, name){
   S.place = name || null;
   S.lat = lat; S.lon = lon;
   S.ground = groundGuess != null ? groundGuess : S.ground;
-  S.groundKnown = false; S.session = 0;
-  descend();                       // 先停在高处，等粗瓦片铺开，再落下来
-  sampleGround(true);
+  S.session = 0;
+  if (S.mode === 'photo'){
+    S.groundKnown = false;
+    descend();                     // 先停在高处，等粗瓦片铺开，再落下来
+    sampleGround(true);
+  } else {
+    S.ground = 0; S.groundKnown = true;
+    descend();                     // 轻量档也空降，纯粹因为好看
+    if (S.mode !== 'white') loadOsm(S.mode === 'riso', true);
+  }
 }
 
 /* 从高空落到街面：粗瓦片几块就能铺满视野，先看到轮廓，
@@ -667,7 +871,9 @@ function frame(){
     if (k >= 1){
       const wasDescent = glide.kind === 'descend';
       glide = null; S.alt = 0; S.pitchOff = 0;
-      S.groundKnown = true; sampleGround(true); save();
+      S.groundKnown = true;
+      if (S.mode === 'photo') sampleGround(true);
+      save();
       if (wasDescent && tileset && !fastMode) tileset.maximumScreenSpaceError = BASE_SSE;
     }
   }
@@ -677,7 +883,10 @@ function frame(){
   if (keys.d || keys.arrowright) S.heading += 55 * dt;
   S.heading = (S.heading % 360 + 360) % 360;
 
-  if (!glide) sampleGround(false);
+  if (!glide){
+    if (S.mode === 'photo') sampleGround(false);
+    else if (S.mode === 'lite' || S.mode === 'riso') loadOsm(S.mode === 'riso', false);
+  }
   MOTION.tick();
 
   camera.setView({
@@ -704,7 +913,7 @@ function frame(){
         {timeZone:p.tz, hour:'2-digit', minute:'2-digit', hour12:false}).format(new Date());
     }catch(e){} }
     let pending = 0;
-    try{ pending = tileset.statistics.numberOfPendingRequests | 0 }catch(e){}
+    try{ if (S.mode === 'photo') pending = tileset.statistics.numberOfPendingRequests | 0 }catch(e){}
     $('#navLabel').textContent = pending > 0
       ? '载入 ' + pending + ' 块…'
       : (S.place || (p ? p.n.split(' · ')[0] : '去哪儿'));
